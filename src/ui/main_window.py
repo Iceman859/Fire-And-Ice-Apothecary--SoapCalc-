@@ -48,105 +48,106 @@ class MainWindow(QMainWindow):
         self._suppress_oils_table_signals = False
         self._suppress_additives_table_signals = False
     
-    def apply_dark_theme(self):
+    def apply_dark_theme(self, accent_color="#0d47a1", hover_color="#1565c0", pressed_color="#0a3d91"):
         """Apply dark theme stylesheet"""
-        dark_stylesheet = """
-        QMainWindow, QWidget, QMainWindow::title {
+        dark_stylesheet = f"""
+        QMainWindow, QWidget, QMainWindow::title {{
             background-color: #1e1e1e;
             color: #e0e0e0;
-        }
+        }}
         
-        QLabel {
+        QLabel {{
             color: #e0e0e0;
-        }
+        }}
         
-        QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit {
+        QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit {{
             background-color: #2d2d2d;
             color: #e0e0e0;
             border: 1px solid #3d3d3d;
             padding: 5px;
             border-radius: 3px;
-        }
+        }}
         
         QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, 
-        QComboBox:focus, QTextEdit:focus {
-            border: 1px solid #0d47a1;
+        QComboBox:focus, QTextEdit:focus {{
+            border: 1px solid {accent_color};
             background-color: #323232;
-        }
+        }}
         
-        QPushButton {
-            background-color: #0d47a1;
+        QPushButton {{
+            background-color: {accent_color};
             color: #e0e0e0;
             border: none;
             padding: 8px 16px;
             border-radius: 3px;
             font-weight: bold;
-        }
+        }}
         
-        QPushButton:hover {
-            background-color: #1565c0;
-        }
+        QPushButton:hover {{
+            background-color: {hover_color};
+        }}
         
-        QPushButton:pressed {
-            background-color: #0a3d91;
-        }
+        QPushButton:pressed {{
+            background-color: {pressed_color};
+        }}
         
-        QTableWidget, QTableWidget::item {
+        QTableWidget, QTableWidget::item {{
             background-color: #2d2d2d;
             color: #e0e0e0;
             gridline-color: #3d3d3d;
-        }
+        }}
         
-        QTableWidget::item:selected {
-            background-color: #0d47a1;
-        }
+        QTableWidget::item:selected {{
+            background-color: {accent_color};
+        }}
         
-        QHeaderView::section {
+        QHeaderView::section {{
             background-color: #424242;
             color: #e0e0e0;
             padding: 5px;
             border: 1px solid #3d3d3d;
-        }
+        }}
         
-        QTabWidget::pane {
+        QTabWidget::pane {{
             border: 1px solid #3d3d3d;
-        }
+        }}
         
-        QTabBar::tab {
+        QTabBar::tab {{
             background-color: #2d2d2d;
             color: #a0a0a0;
             padding: 8px 20px;
             border: 1px solid #3d3d3d;
-        }
+        }}
         
-        QTabBar::tab:selected {
-            background-color: #0d47a1;
+        QTabBar::tab:selected {{
+            background-color: {accent_color};
             color: #e0e0e0;
-        }
+        }}
         
-        QScrollBar:vertical {
+        QScrollBar:vertical {{
             background-color: #2d2d2d;
             width: 12px;
             border: none;
-        }
+        }}
         
-        QScrollBar::handle:vertical {
+        QScrollBar::handle:vertical {{
             background-color: #545454;
             border-radius: 6px;
             min-height: 20px;
-        }
+        }}
         
-        QScrollBar::handle:vertical:hover {
+        QScrollBar::handle:vertical:hover {{
             background-color: #656565;
-        }
+        }}
         
-        QStatusBar {
+        QStatusBar {{
             background-color: #2d2d2d;
             color: #e0e0e0;
             border-top: 1px solid #3d3d3d;
-        }
+        }}
         """
         self.setStyleSheet(dark_stylesheet)
+
     
     def setup_ui(self):
         """Setup the user interface"""
@@ -332,6 +333,7 @@ class MainWindow(QMainWindow):
         # Sync settings to calculator first
         self.settings_widget.settings_changed.connect(self.sync_settings_to_calculator)
         self.settings_widget.settings_changed.connect(self.update_input_units)
+        self.settings_widget.settings_changed.connect(self.update_theme_from_settings)
         # Sync recipe parameters
         self.recipe_settings.parameters_changed.connect(self.update_results)
         self.recipe_settings.parameters_changed.connect(self.save_preferences)
@@ -347,6 +349,24 @@ class MainWindow(QMainWindow):
         # ensure tables update when settings change (units etc.)
         self.settings_widget.settings_changed.connect(self.update_oils_table)
         self.settings_widget.settings_changed.connect(self.update_additives_table)
+
+    def get_theme_colors(self, name):
+        """Get colors for theme name"""
+        themes = {
+            "Blue": {"accent": "#0d47a1", "hover": "#1565c0", "pressed": "#0a3d91"},
+            "Green": {"accent": "#2e7d32", "hover": "#388e3c", "pressed": "#1b5e20"},
+            "Red": {"accent": "#c62828", "hover": "#d32f2f", "pressed": "#b71c1c"},
+            "Purple": {"accent": "#6a1b9a", "hover": "#7b1fa2", "pressed": "#4a148c"},
+            "Orange": {"accent": "#ef6c00", "hover": "#f57c00", "pressed": "#e65100"},
+            "Teal": {"accent": "#00695c", "hover": "#00796b", "pressed": "#004d40"},
+        }
+        return themes.get(name, themes["Blue"])
+
+    def update_theme_from_settings(self):
+        """Update application theme based on settings selection"""
+        theme_name = self.settings_widget.theme_combo.currentText()
+        colors = self.get_theme_colors(theme_name)
+        self.apply_dark_theme(colors["accent"], colors["hover"], colors["pressed"])
 
     def update_input_units(self):
         """Update input widgets with new unit system"""
@@ -599,6 +619,10 @@ class MainWindow(QMainWindow):
             lye_type = self._settings.value('lye_type', 'NaOH')
             self.recipe_settings.lye_combo.setCurrentText(lye_type)
             
+            # Theme
+            theme = self._settings.value('theme_accent', 'Blue')
+            self.settings_widget.theme_combo.setCurrentText(theme)
+            
         except Exception as e:
             print(f"Error loading preferences: {e}")
         finally:
@@ -608,6 +632,7 @@ class MainWindow(QMainWindow):
         # Sync UI state to calculator to ensure consistency
         self.sync_settings_to_calculator()
         self.update_input_units()
+        self.update_theme_from_settings()
 
         # Refresh UI to reflect loaded preferences
         self.update_scale_label()
@@ -624,6 +649,7 @@ class MainWindow(QMainWindow):
         self._settings.setValue('water_percent', float(self.calculator.water_percent))
         self._settings.setValue('lye_concentration', float(self.calculator.lye_concentration))
         self._settings.setValue('lye_type', self.calculator.lye_type)
+        self._settings.setValue('theme_accent', self.settings_widget.theme_combo.currentText())
 
     def sync_settings_to_calculator(self):
         """Ensure calculator is updated from settings widget"""

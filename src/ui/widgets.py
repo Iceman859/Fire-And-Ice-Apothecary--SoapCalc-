@@ -477,6 +477,15 @@ class SettingsWidget(QWidget):
         unit_layout.addWidget(self.unit_combo)
         layout.addLayout(unit_layout)
         
+        # Theme Accent
+        theme_layout = QHBoxLayout()
+        theme_layout.addWidget(QLabel("Theme Accent:"))
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Blue", "Green", "Red", "Purple", "Orange", "Teal"])
+        self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
+        theme_layout.addWidget(self.theme_combo)
+        layout.addLayout(theme_layout)
+        
         layout.addStretch()
         self.setLayout(layout)
     
@@ -484,6 +493,10 @@ class SettingsWidget(QWidget):
         """Handle unit system change"""
         unit_map = {"Grams": "grams", "Ounces": "ounces", "Pounds": "pounds"}
         self.calculator.set_unit_system(unit_map.get(unit_text, "grams"))
+        self.settings_changed.emit()
+
+    def on_theme_changed(self, theme_text: str):
+        """Handle theme accent change"""
         self.settings_changed.emit()
 
 
