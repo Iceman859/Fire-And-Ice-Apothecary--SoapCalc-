@@ -160,6 +160,9 @@ class SoapCalculator:
             for k in fa_keys:
                 fa_percentages[k] = 0.0
         
+        # Compute relative quality scores using weighted average of oil qualities
+        relative_qualities = self._calculate_recipe_qualities()
+
         return {
             "total_oil_weight": round(total_oil, 2),
             "lye_weight": lye,
@@ -170,6 +173,7 @@ class SoapCalculator:
             "iodine_value": round(iodine_value, 2),
             "ins_value": round(ins_value, 2),
             "fa_breakdown": fa_percentages,
+            "relative_qualities": relative_qualities,
         }
     
     def _calculate_iodine_value(self) -> float:
@@ -294,6 +298,61 @@ class SoapCalculator:
         elif from_unit == "pounds":
             return weight * 453.592
         return weight
+
+    def _calculate_recipe_qualities(self) -> dict:
+        """Calculate recipe qualities as weighted average of oil qualities.
+        
+        Per SoapMaker 3: Recipe_Quality = Σ(Oil_Quality × Oil_Percentage)
+        
+        Each oil has pre-calculated quality scores (0-10 scale):
+        - Hardness: how long the bar lasts
+        - Fluffy Lather: ability to form large bubbles
+        - Stable Lather: long-lasting creamy lather
+        - Moisturizing: skin conditioning
+        """
+        from ..data.oils import OILS
+        
+        total_oil = self.get_total_oil_weight()
+        if total_oil == 0:
+            return {
+                "Hardness": 0.0,
+                "Fluffy Lather": 0.0,
+                "Stable Lather": 0.0,
+                "Moisturizing": 0.0,
+            }
+        
+        # Weighted average of oil qualities
+        hardness_sum = 0.0
+        fluffy_sum = 0.0
+        stable_sum = 0.0
+        moist_sum = 0.0
+        
+        for oil_name, weight in self.oils.items():
+            if oil_name in OILS:
+                info = OILS[oil_name]
+                percentage = weight / total_oil
+                
+                # Use quality values if available, default to 0
+                hardness_sum += info.get("quality_hardness", 0.0) * percentage
+                fluffy_sum += info.get("quality_fluffy", 0.0) * percentage
+                stable_sum += info.get("quality_stable", 0.0) * percentage
+                moist_sum += info.get("quality_moisturizing", 0.0) * percentage
+        
+        return {
+            "Hardness": round(hardness_sum, 1),
+            "Fluffy Lather": round(fluffy_sum, 1),
+            "Stable Lather": round(stable_sum, 1),
+            "Moisturizing": round(moist_sum, 1),
+        }
+    
+    def _calculate_relative_qualities(self, fa_percentages: dict) -> dict:
+        """Deprecated: Use _calculate_recipe_qualities instead.
+        
+        This method kept for backward compatibility.
+        Calculate qualities from fatty acid percentages (less accurate).
+        """
+        # Just delegate to the oil-based quality calculation
+        return self._calculate_recipe_qualities()
     
     def get_unit_abbreviation(self) -> str:
         """Get abbreviation for current unit system"""

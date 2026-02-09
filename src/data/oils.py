@@ -1,4 +1,4 @@
-"""Oil database with saponification (SAP) values"""
+"""Oil database with saponification (SAP) values and quality metrics"""
 
 # Oil database with SAP values
 # SAP value = mg of NaOH needed per gram of oil
@@ -12,6 +12,10 @@ OILS = {
         "iodine_value": 8,
         "hardness": 8,
         "description": "Creates hard bar soap, high lather, can be drying. Industry standard FA profile.",
+        "quality_hardness": 7.6,
+        "quality_fluffy": 9.5,
+        "quality_stable": 0.7,
+        "quality_moisturizing": 2.0,
         "fa": {
             "lauric": 47.0,
             "myristic": 18.5,
@@ -29,6 +33,10 @@ OILS = {
         "iodine_value": 53,
         "hardness": 5,
         "description": "Creates hard bar soap, moderate lather",
+        "quality_hardness": 6.6,
+        "quality_fluffy": 3.8,
+        "quality_stable": 6.9,
+        "quality_moisturizing": 6.3,
         "fa": {
             "lauric": 0.5,
             "myristic": 1.0,
@@ -46,6 +54,10 @@ OILS = {
         "iodine_value": 80,
         "hardness": 1,
         "description": "Produces creamy lather, mild soap. Extra virgin/virgin average.",
+        "quality_hardness": 5.2,
+        "quality_fluffy": 3.1,
+        "quality_stable": 8.0,
+        "quality_moisturizing": 8.7,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -63,6 +75,10 @@ OILS = {
         "iodine_value": 103,
         "hardness": 1,
         "description": "Creates soft soap, conditioning",
+        "quality_hardness": 3.6,
+        "quality_fluffy": 2.7,
+        "quality_stable": 7.8,
+        "quality_moisturizing": 9.3,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -80,6 +96,10 @@ OILS = {
         "iodine_value": 130,
         "hardness": 1,
         "description": "Produces soft soap, conditioning properties",
+        "quality_hardness": 3.0,
+        "quality_fluffy": 2.8,
+        "quality_stable": 7.0,
+        "quality_moisturizing": 8.2,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -97,6 +117,10 @@ OILS = {
         "iodine_value": 130,
         "hardness": 1,
         "description": "Creates soft soap, nice lather",
+        "quality_hardness": 2.8,
+        "quality_fluffy": 2.4,
+        "quality_stable": 6.3,
+        "quality_moisturizing": 7.9,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -114,6 +138,10 @@ OILS = {
         "iodine_value": 8,
         "hardness": 8,
         "description": "Refined version of coconut oil",
+        "quality_hardness": 7.6,
+        "quality_fluffy": 9.5,
+        "quality_stable": 0.7,
+        "quality_moisturizing": 2.0,
         "fa": {
             "lauric": 48.0,
             "myristic": 18.0,
@@ -131,6 +159,10 @@ OILS = {
         "iodine_value": 37,
         "hardness": 7,
         "description": "Similar to coconut, creates hard bar",
+        "quality_hardness": 8.0,
+        "quality_fluffy": 8.9,
+        "quality_stable": 1.6,
+        "quality_moisturizing": 2.9,
         "fa": {
             "lauric": 48.0,
             "myristic": 15.0,
@@ -149,6 +181,10 @@ OILS = {
         "iodine_value": 100,
         "hardness": 1,
         "description": "Conditioning and moisturizing",
+        "quality_hardness": 5.1,
+        "quality_fluffy": 3.7,
+        "quality_stable": 7.3,
+        "quality_moisturizing": 8.5,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -166,6 +202,10 @@ OILS = {
         "iodine_value": 85,
         "hardness": 1,
         "description": "Increases lather, conditioning. Unique ricinoleic acid structure.",
+        "quality_hardness": 4.4,
+        "quality_fluffy": 1.3,
+        "quality_stable": 10.0,
+        "quality_moisturizing": 10.0,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -183,6 +223,10 @@ OILS = {
         "iodine_value": 82,
         "hardness": 1,
         "description": "Premium conditioning oil",
+        "quality_hardness": 3.3,
+        "quality_fluffy": 0.3,
+        "quality_stable": 1.0,
+        "quality_moisturizing": 6.1,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -200,6 +244,10 @@ OILS = {
         "iodine_value": 97,
         "hardness": 1,
         "description": "Conditioning and moisturizing",
+        "quality_hardness": 4.0,
+        "quality_fluffy": 2.5,
+        "quality_stable": 7.9,
+        "quality_moisturizing": 9.0,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -217,6 +265,10 @@ OILS = {
         "iodine_value": 94,
         "hardness": 1,
         "description": "Luxury conditioning oil",
+        "quality_hardness": 4.4,
+        "quality_fluffy": 3.0,
+        "quality_stable": 7.8,
+        "quality_moisturizing": 8.5,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -234,6 +286,10 @@ OILS = {
         "iodine_value": 59,
         "hardness": 4,
         "description": "Rich and creamy, conditioning. Refined grade average.",
+        "quality_hardness": 6.5,
+        "quality_fluffy": 2.7,
+        "quality_stable": 8.2,
+        "quality_moisturizing": 6.9,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -251,6 +307,10 @@ OILS = {
         "iodine_value": 35,
         "hardness": 6,
         "description": "Hard and stable, excellent conditioning",
+        "quality_hardness": 7.7,
+        "quality_fluffy": 3.2,
+        "quality_stable": 7.4,
+        "quality_moisturizing": 5.4,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -269,6 +329,10 @@ OILS = {
         "iodine_value": 140,
         "hardness": 1,
         "description": "Lightweight, conditioning",
+        "quality_hardness": 3.0,
+        "quality_fluffy": 3.0,
+        "quality_stable": 7.9,
+        "quality_moisturizing": 9.4,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -286,6 +350,10 @@ OILS = {
         "iodine_value": 161,
         "hardness": 1,
         "description": "Conditioning and moisturizing",
+        "quality_hardness": 1.6,
+        "quality_fluffy": 3.0,
+        "quality_stable": 7.8,
+        "quality_moisturizing": 9.1,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -303,6 +371,10 @@ OILS = {
         "iodine_value": 103,
         "hardness": 1,
         "description": "Creates soft soap with lather",
+        "quality_hardness": 3.8,
+        "quality_fluffy": 3.2,
+        "quality_stable": 7.9,
+        "quality_moisturizing": 8.9,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -320,6 +392,10 @@ OILS = {
         "iodine_value": 126,
         "hardness": 1,
         "description": "Rich in vitamins and antioxidants",
+        "quality_hardness": 0.0,
+        "quality_fluffy": 0.0,
+        "quality_stable": 0.0,
+        "quality_moisturizing": 0.0,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -337,6 +413,10 @@ OILS = {
         "iodine_value": 100,
         "hardness": 1,
         "description": "Stable oil, conditioning and skin-friendly",
+        "quality_hardness": 4.0,
+        "quality_fluffy": 3.2,
+        "quality_stable": 7.9,
+        "quality_moisturizing": 9.0,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -354,6 +434,10 @@ OILS = {
         "iodine_value": 103,
         "hardness": 1,
         "description": "Conditioning, used in many traditional recipes",
+        "quality_hardness": 3.9,
+        "quality_fluffy": 2.9,
+        "quality_stable": 7.7,
+        "quality_moisturizing": 8.7,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -371,6 +455,10 @@ OILS = {
         "iodine_value": 175,
         "hardness": 0,
         "description": "Very high in linolenic acid; makes soft soap",
+        "quality_hardness": 3.7,
+        "quality_fluffy": 2.9,
+        "quality_stable": 7.5,
+        "quality_moisturizing": 8.9,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -388,6 +476,10 @@ OILS = {
         "iodine_value": 140,
         "hardness": 1,
         "description": "Conditioning, rich in omega fatty acids",
+        "quality_hardness": 2.3,
+        "quality_fluffy": 2.6,
+        "quality_stable": 6.9,
+        "quality_moisturizing": 8.3,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -405,6 +497,10 @@ OILS = {
         "iodine_value": 95,
         "hardness": 1,
         "description": "Good conditioning, common in soap recipes",
+        "quality_hardness": 4.5,
+        "quality_fluffy": 2.9,
+        "quality_stable": 7.4,
+        "quality_moisturizing": 8.4,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -422,6 +518,10 @@ OILS = {
         "iodine_value": 140,
         "hardness": 1,
         "description": "High linoleic variety is conditioning",
+        "quality_hardness": 3.7,
+        "quality_fluffy": 3.0,
+        "quality_stable": 8.0,
+        "quality_moisturizing": 9.2,
         "fa": {
             "lauric": 0.0,
             "myristic": 0.0,
@@ -435,29 +535,16 @@ OILS = {
     },
 }
 
-
 def get_oil_sap(oil_name: str, lye_type: str = "NaOH") -> float:
-    """
-    Get SAP value for an oil.
-    
-    Args:
-        oil_name: Name of the oil
-        lye_type: Type of lye ("NaOH" or "KOH")
-    
-    Returns:
-        SAP value in mg/g
-    """
+    """Get SAP value for an oil."""
     if oil_name not in OILS:
         return 0.0
-    
     key = f"sap_{lye_type.lower()}"
     return OILS[oil_name].get(key, 0.0)
-
 
 def get_all_oil_names() -> list:
     """Get list of all available oil names"""
     return sorted(list(OILS.keys()))
-
 
 def get_oil_info(oil_name: str) -> dict:
     """Get full information about an oil"""

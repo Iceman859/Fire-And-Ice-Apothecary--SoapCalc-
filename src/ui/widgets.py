@@ -2,9 +2,10 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox,
-    QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QSpinBox, QCompleter
+    QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QSpinBox, QCompleter, QGroupBox,
+    QGridLayout
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
 from src.models import SoapCalculator, RecipeManager
 from src.data import get_all_oil_names
 from src.data.additives import get_all_additive_names
@@ -32,11 +33,11 @@ class OilInputWidget(QWidget):
     
     def setup_ui(self):
         """Setup oil input controls"""
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Oil selection
-        select_layout = QHBoxLayout()
-        select_layout.addWidget(QLabel("Oil:"))
+        layout.addWidget(QLabel("Oil:"))
         self.oil_combo = QComboBox()
         self.oil_combo.setEditable(True)
         names = get_all_oil_names()
@@ -44,28 +45,25 @@ class OilInputWidget(QWidget):
         # simple completion
         completer = QCompleter(names)
         self.oil_combo.setCompleter(completer)
-        select_layout.addWidget(self.oil_combo)
-        layout.addLayout(select_layout)
+        layout.addWidget(self.oil_combo, 2)
         
         # Weight input with unit selector
-        weight_layout = QHBoxLayout()
-        weight_layout.addWidget(QLabel("Weight:"))
+        layout.addWidget(QLabel("Weight:"))
         self.weight_spinbox = QDoubleSpinBox()
         self.weight_spinbox.setRange(0, 10000)
         self.weight_spinbox.setValue(100)
-        weight_layout.addWidget(self.weight_spinbox)
+        layout.addWidget(self.weight_spinbox, 1)
         
         self.weight_unit_combo = QComboBox()
         self.weight_unit_combo.addItems(["g", "oz", "lbs"])
-        weight_layout.addWidget(self.weight_unit_combo)
-        layout.addLayout(weight_layout)
+        self.weight_unit_combo.setFixedWidth(60)
+        layout.addWidget(self.weight_unit_combo)
         
         # Add button
-        add_btn = QPushButton("Add Oil to Recipe")
+        add_btn = QPushButton("Add")
         add_btn.clicked.connect(self.add_oil)
         layout.addWidget(add_btn)
         
-        layout.addStretch()
         self.setLayout(layout)
     
     def add_oil(self):
@@ -81,6 +79,11 @@ class OilInputWidget(QWidget):
             self.calculator.add_oil(oil_name, weight_grams)
             self.weight_spinbox.setValue(100)
             self.oil_added.emit()
+            
+    def set_unit_system(self, unit_system: str):
+        """Update default unit selection based on global settings"""
+        unit_map = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
+        self.weight_unit_combo.setCurrentText(unit_map.get(unit_system, "g"))
 
 
 class AdditiveInputWidget(QWidget):
@@ -94,55 +97,55 @@ class AdditiveInputWidget(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QVBoxLayout()
-        select_layout = QHBoxLayout()
-        select_layout.addWidget(QLabel("Additive:"))
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        layout.addWidget(QLabel("Additive:"))
         self.add_combo = QComboBox()
         self.add_combo.setEditable(True)
         self.add_combo.addItems(get_all_additive_names())
-        select_layout.addWidget(self.add_combo)
-        layout.addLayout(select_layout)
+        layout.addWidget(self.add_combo, 2)
 
         # Amount type selector: percent of oils or explicit weight
-        type_layout = QHBoxLayout()
-        type_layout.addWidget(QLabel("Amount Type:"))
         self.amount_type_combo = QComboBox()
         self.amount_type_combo.addItems(["% of Oils", "Weight"])
         self.amount_type_combo.currentTextChanged.connect(self.on_amount_type_changed)
-        type_layout.addWidget(self.amount_type_combo)
-        layout.addLayout(type_layout)
+        layout.addWidget(self.amount_type_combo)
 
         # Percent input (default)
-        self.percent_layout = QHBoxLayout()
-        self.percent_layout.addWidget(QLabel("Amount (% of oils):"))
+        self.percent_widget = QWidget()
+        p_layout = QHBoxLayout(self.percent_widget)
+        p_layout.setContentsMargins(0,0,0,0)
+        p_layout.addWidget(QLabel("%:"))
         self.add_spin = QDoubleSpinBox()
         self.add_spin.setRange(0, 100)
         self.add_spin.setSingleStep(0.5)
         self.add_spin.setValue(3.0)
-        self.percent_layout.addWidget(self.add_spin)
-        layout.addLayout(self.percent_layout)
+        p_layout.addWidget(self.add_spin)
+        layout.addWidget(self.percent_widget)
 
         # Weight input (hidden by default)
-        self.weight_layout = QHBoxLayout()
-        self.weight_layout.addWidget(QLabel("Amount:"))
+        self.weight_widget = QWidget()
+        w_layout = QHBoxLayout(self.weight_widget)
+        w_layout.setContentsMargins(0,0,0,0)
+        w_layout.addWidget(QLabel("Amt:"))
         self.add_weight_spin = QDoubleSpinBox()
         self.add_weight_spin.setRange(0, 10000)
         self.add_weight_spin.setSingleStep(1.0)
         self.add_weight_spin.setValue(50.0)
-        self.weight_layout.addWidget(self.add_weight_spin)
+        w_layout.addWidget(self.add_weight_spin)
         self.add_unit_combo = QComboBox()
         self.add_unit_combo.addItems(["g", "oz", "lbs"])
-        self.weight_layout.addWidget(self.add_unit_combo)
-        self.weight_widget = QWidget()
-        self.weight_widget.setLayout(self.weight_layout)
+        self.add_unit_combo.setFixedWidth(60)
+        w_layout.addWidget(self.add_unit_combo)
+        
         self.weight_widget.setVisible(False)
         layout.addWidget(self.weight_widget)
 
-        add_btn = QPushButton("Add Additive")
+        add_btn = QPushButton("Add")
         add_btn.clicked.connect(self.add_additive)
         layout.addWidget(add_btn)
 
-        layout.addStretch()
         self.setLayout(layout)
 
     def add_additive(self):
@@ -169,14 +172,16 @@ class AdditiveInputWidget(QWidget):
     def on_amount_type_changed(self, text: str):
         """Show/hide percent vs weight inputs"""
         if text == "% of Oils":
-            self.percent_layout.parentWidget().setVisible(True) if hasattr(self.percent_layout, 'parentWidget') else None
+            self.percent_widget.setVisible(True)
             self.weight_widget.setVisible(False)
         else:
-            # hide percent, show weight
-            # percent layout was added directly to main layout; hide its widgets
-            for i in range(self.percent_layout.count()):
-                self.percent_layout.itemAt(i).widget().setVisible(False)
+            self.percent_widget.setVisible(False)
             self.weight_widget.setVisible(True)
+            
+    def set_unit_system(self, unit_system: str):
+        """Update default unit selection based on global settings"""
+        unit_map = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
+        self.add_unit_combo.setCurrentText(unit_map.get(unit_system, "g"))
 
 
 class CalculationResultsWidget(QWidget):
@@ -191,14 +196,41 @@ class CalculationResultsWidget(QWidget):
         """Setup results display"""
         layout = QVBoxLayout()
         
-        # Results table
-        self.results_table = QTableWidget()
-        self.results_table.setColumnCount(2)
-        self.results_table.setHorizontalHeaderLabels(["Property", "Value"])
-        self.results_table.setColumnWidth(0, 200)
-        self.results_table.setColumnWidth(1, 150)
-        layout.addWidget(self.results_table)
+        # Batch Weights
+        self.weights_group = QGroupBox("Batch Weights")
+        w_layout = QGridLayout()
         
+        self.weight_labels = {}
+        weight_keys = ["Total Oil Weight", "Water Weight", "Lye Weight", "Total Batch Weight"]
+        
+        for i, key in enumerate(weight_keys):
+            w_layout.addWidget(QLabel(f"{key}:"), i, 0)
+            val_lbl = QLabel("0.00")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            w_layout.addWidget(val_lbl, i, 1)
+            self.weight_labels[key] = val_lbl
+            
+        self.weights_group.setLayout(w_layout)
+        layout.addWidget(self.weights_group)
+        
+        # Predicted Qualities
+        self.qualities_group = QGroupBox("Predicted Qualities")
+        q_layout = QGridLayout()
+        
+        self.quality_labels_display = {}
+        quality_keys = ["Hardness", "Conditioning", "Bubbly", "Creamy", "Iodine", "INS"]
+        
+        for i, key in enumerate(quality_keys):
+            q_layout.addWidget(QLabel(f"{key}:"), i, 0)
+            val_lbl = QLabel("0.0")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            q_layout.addWidget(val_lbl, i, 1)
+            self.quality_labels_display[key] = val_lbl
+            
+        self.qualities_group.setLayout(q_layout)
+        layout.addWidget(self.qualities_group)
+        
+        layout.addStretch()
         self.setLayout(layout)
     
     def update_results(self, properties: dict, unit_system: str = "grams"):
@@ -219,21 +251,33 @@ class CalculationResultsWidget(QWidget):
                 return f"{grams / 453.592:.2f}"
             return f"{grams:.2f}"
         
-        rows = [
-            ("Total Oil Weight", f"{convert_weight(properties['total_oil_weight'])} {unit_abbr}"),
-            ("Lye Weight", f"{convert_weight(properties['lye_weight'])} {unit_abbr}"),
-            ("Water Weight", f"{convert_weight(properties['water_weight'])} {unit_abbr}"),
-            ("Total Batch Weight", f"{convert_weight(properties['total_batch_weight'])} {unit_abbr}"),
-            ("Lye %", f"{properties['lye_percentage']:.2f}%"),
-            ("Water %", f"{properties['water_percentage']:.2f}%"),
-            ("Iodine Value", f"{properties['iodine_value']:.2f}"),
-            ("INS Value", f"{properties['ins_value']:.2f}"),
-        ]
+        # Batch Weights
+        weights_map = {
+            "Total Oil Weight": properties['total_oil_weight'],
+            "Water Weight": properties['water_weight'],
+            "Lye Weight": properties['lye_weight'],
+            "Total Batch Weight": properties['total_batch_weight']
+        }
         
-        self.results_table.setRowCount(len(rows))
-        for row, (name, value) in enumerate(rows):
-            self.results_table.setItem(row, 0, QTableWidgetItem(name))
-            self.results_table.setItem(row, 1, QTableWidgetItem(value))
+        for key, grams in weights_map.items():
+            if key in self.weight_labels:
+                self.weight_labels[key].setText(f"{convert_weight(grams)} {unit_abbr}")
+            
+        # Soap Qualities
+        qualities = properties.get('relative_qualities', {})
+        
+        quality_map = {
+            "Hardness": qualities.get('Hardness', 0),
+            "Conditioning": qualities.get('Moisturizing', 0),
+            "Bubbly": qualities.get('Fluffy Lather', 0),
+            "Creamy": qualities.get('Stable Lather', 0),
+            "Iodine": properties.get('iodine_value', 0),
+            "INS": properties.get('ins_value', 0)
+        }
+        
+        for key, val in quality_map.items():
+            if key in self.quality_labels_display:
+                self.quality_labels_display[key].setText(f"{float(val):.1f}")
 
 
 class FABreakdownWidget(QWidget):
@@ -247,25 +291,37 @@ class FABreakdownWidget(QWidget):
     def setup_ui(self):
         # Two-column layout: left = table, right = chart
         layout = QHBoxLayout()
+        
+        # FA Labels Group (left column)
+        self.fa_group = QGroupBox("Fatty Acid Profile")
+        fa_layout = QGridLayout()
+        
+        self.fa_labels = {}
+        order = [
+            'lauric', 'myristic', 'palmitic', 'stearic',
+            'oleic', 'linoleic', 'linolenic', 'ricinoleic'
+        ]
+        
+        for i, key in enumerate(order):
+            fa_layout.addWidget(QLabel(f"{key.capitalize()}:"), i, 0)
+            val_lbl = QLabel("0.00%")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            fa_layout.addWidget(val_lbl, i, 1)
+            self.fa_labels[key] = val_lbl
+            
+        self.fa_group.setLayout(fa_layout)
+        layout.addWidget(self.fa_group, 1)
 
-        # Table for FA breakdown (left column)
-        self.fa_table = QTableWidget()
-        self.fa_table.setColumnCount(2)
-        self.fa_table.setHorizontalHeaderLabels(["Fatty Acid", "% of Total"])
-        self.fa_table.setColumnWidth(0, 140)
-        self.fa_table.setColumnWidth(1, 80)
-        layout.addWidget(self.fa_table, 1)
-
-        # Chart area (matplotlib) if available (right column)
-        right_col = QVBoxLayout()
+        # Chart area (matplotlib)
+        chart_col = QVBoxLayout()
         if _HAS_MATPLOTLIB:
             self.figure = Figure(figsize=(4, 3))
             self.canvas = FigureCanvas(self.figure)
-            right_col.addWidget(self.canvas)
+            chart_col.addWidget(self.canvas)
         else:
-            right_col.addWidget(QLabel("Install matplotlib to see chart."))
+            chart_col.addWidget(QLabel("Install matplotlib to see chart."))
 
-        layout.addLayout(right_col, 1)
+        layout.addLayout(chart_col, 2)
         self.setLayout(layout)
 
     def update_fa(self, properties: dict, unit_system: str = "grams"):
@@ -276,17 +332,16 @@ class FABreakdownWidget(QWidget):
             'oleic', 'linoleic', 'linolenic', 'ricinoleic'
         ]
 
-        rows = len(order)
-        self.fa_table.setRowCount(rows)
         values = []
         labels = []
-        for i, key in enumerate(order):
+        for key in order:
             # `fa` provided by calculator is already percent (0-100)
             val = float(fa.get(key, 0.0))
             labels.append(key.capitalize())
             values.append(val)
-            self.fa_table.setItem(i, 0, QTableWidgetItem(key.capitalize()))
-            self.fa_table.setItem(i, 1, QTableWidgetItem(f"{val:.2f}%"))
+            
+            if key in self.fa_labels:
+                self.fa_labels[key].setText(f"{val:.2f}%")
 
         if _HAS_MATPLOTLIB:
             self.figure.clear()
@@ -304,28 +359,18 @@ class FABreakdownWidget(QWidget):
             self.canvas.draw()
 
 
-class SettingsWidget(QWidget):
-    """Widget for recipe settings"""
+class RecipeParametersWidget(QWidget):
+    """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
     
-    settings_changed = pyqtSignal()
+    parameters_changed = pyqtSignal()
     
     def __init__(self, calculator: SoapCalculator):
         super().__init__()
         self.calculator = calculator
         self.setup_ui()
-    
-    def setup_ui(self):
-        """Setup settings controls"""
-        layout = QVBoxLayout()
         
-        # Unit System
-        unit_layout = QHBoxLayout()
-        unit_layout.addWidget(QLabel("Unit System:"))
-        self.unit_combo = QComboBox()
-        self.unit_combo.addItems(["Grams", "Ounces", "Pounds"])
-        self.unit_combo.currentTextChanged.connect(self.on_unit_changed)
-        unit_layout.addWidget(self.unit_combo)
-        layout.addLayout(unit_layout)
+    def setup_ui(self):
+        layout = QVBoxLayout()
         
         # Lye Type
         lye_layout = QHBoxLayout()
@@ -368,17 +413,17 @@ class SettingsWidget(QWidget):
         self.water_value_layout.addWidget(self.water_value_spinbox)
         layout.addLayout(self.water_value_layout)
         
-        layout.addStretch()
         self.setLayout(layout)
-    
-    def on_unit_changed(self, unit_text: str):
-        """Handle unit system change"""
-        unit_map = {"Grams": "grams", "Ounces": "ounces", "Pounds": "pounds"}
-        self.calculator.set_unit_system(unit_map.get(unit_text, "grams"))
-        self.settings_changed.emit()
-    
+
+    def on_lye_type_changed(self, lye_type: str):
+        self.calculator.set_lye_type(lye_type)
+        self.parameters_changed.emit()
+
+    def on_superfat_changed(self):
+        self.calculator.set_superfat(self.superfat_spinbox.value())
+        self.parameters_changed.emit()
+
     def on_water_method_changed(self, method_text: str):
-        """Handle water calculation method change"""
         method_map = {
             "Water:Lye Ratio": "ratio",
             "Water % of Oils": "percent",
@@ -401,22 +446,44 @@ class SettingsWidget(QWidget):
             self.water_value_spinbox.setRange(1, 99)
             self.water_value_spinbox.setValue(self.calculator.lye_concentration)
         
-        self.settings_changed.emit()
-    
+        self.parameters_changed.emit()
+
     def on_water_value_changed(self):
-        """Handle water calculation value change"""
         value = self.water_value_spinbox.value()
         self.calculator.set_water_calc_method(self.calculator.water_calc_method, value)
-        self.settings_changed.emit()
+        self.parameters_changed.emit()
+
+
+class SettingsWidget(QWidget):
+    """Widget for recipe settings"""
     
-    def on_superfat_changed(self):
-        """Handle superfat change"""
-        self.calculator.set_superfat(self.superfat_spinbox.value())
-        self.settings_changed.emit()
+    settings_changed = pyqtSignal()
     
-    def on_lye_type_changed(self, lye_type: str):
-        """Handle lye type change"""
-        self.calculator.set_lye_type(lye_type)
+    def __init__(self, calculator: SoapCalculator):
+        super().__init__()
+        self.calculator = calculator
+        self.setup_ui()
+    
+    def setup_ui(self):
+        """Setup settings controls"""
+        layout = QVBoxLayout()
+        
+        # Unit System
+        unit_layout = QHBoxLayout()
+        unit_layout.addWidget(QLabel("Unit System:"))
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(["Grams", "Ounces", "Pounds"])
+        self.unit_combo.currentTextChanged.connect(self.on_unit_changed)
+        unit_layout.addWidget(self.unit_combo)
+        layout.addLayout(unit_layout)
+        
+        layout.addStretch()
+        self.setLayout(layout)
+    
+    def on_unit_changed(self, unit_text: str):
+        """Handle unit system change"""
+        unit_map = {"Grams": "grams", "Ounces": "ounces", "Pounds": "pounds"}
+        self.calculator.set_unit_system(unit_map.get(unit_text, "grams"))
         self.settings_changed.emit()
 
 
