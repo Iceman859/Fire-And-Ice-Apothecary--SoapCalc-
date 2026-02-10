@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox,
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QSpinBox, QCompleter, QGroupBox,
-    QGridLayout
+    QGridLayout, QTextEdit, QTextBrowser
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from src.models import SoapCalculator, RecipeManager
@@ -20,6 +20,13 @@ except Exception:
     Figure = None
     _HAS_MATPLOTLIB = False
 
+# optional print support
+try:
+    from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
+    _HAS_PRINTER = True
+except ImportError:
+    _HAS_PRINTER = False
+
 
 class OilInputWidget(QWidget):
     """Widget for adding oils to recipe"""
@@ -29,6 +36,7 @@ class OilInputWidget(QWidget):
     def __init__(self, calculator: SoapCalculator):
         super().__init__()
         self.calculator = calculator
+        self.target_weight_callback = None
         self.setup_ui()
     
     def setup_ui(self):
@@ -48,14 +56,16 @@ class OilInputWidget(QWidget):
         layout.addWidget(self.oil_combo, 2)
         
         # Weight input with unit selector
-        layout.addWidget(QLabel("Weight:"))
+        self.weight_label = QLabel("Weight:")
+        layout.addWidget(self.weight_label)
         self.weight_spinbox = QDoubleSpinBox()
         self.weight_spinbox.setRange(0, 10000)
         self.weight_spinbox.setValue(100)
         layout.addWidget(self.weight_spinbox, 1)
         
         self.weight_unit_combo = QComboBox()
-        self.weight_unit_combo.addItems(["g", "oz", "lbs"])
+        self.weight_unit_combo.addItems(["g", "oz", "lbs", "%"])
+        self.weight_unit_combo.currentTextChanged.connect(self.on_unit_changed)
         self.weight_unit_combo.setFixedWidth(60)
         layout.addWidget(self.weight_unit_combo)
         
@@ -73,10 +83,17 @@ class OilInputWidget(QWidget):
         unit = self.weight_unit_combo.currentText()
         
         if weight > 0:
-            # Convert to grams for storage
-            unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
-            weight_grams = self.calculator.convert_to_grams(weight, unit_map[unit])
-            self.calculator.add_oil(oil_name, weight_grams)
+            weight_grams = 0.0
+            if unit == "%":
+                if self.target_weight_callback:
+                    total_grams = self.target_weight_callback()
+                    weight_grams = total_grams * (weight / 100.0)
+            else:
+                unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
+                weight_grams = self.calculator.convert_to_grams(weight, unit_map[unit])
+            
+            if weight_grams > 0:
+                self.calculator.add_oil(oil_name, weight_grams)
             self.weight_spinbox.setValue(100)
             self.oil_added.emit()
             
@@ -85,6 +102,14 @@ class OilInputWidget(QWidget):
         unit_map = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
         self.weight_unit_combo.setCurrentText(unit_map.get(unit_system, "g"))
 
+    def on_unit_changed(self, text: str):
+        """Update label and range based on unit selection"""
+        if text == "%":
+            self.weight_label.setText("Percent:")
+            self.weight_spinbox.setRange(0, 100)
+        else:
+            self.weight_label.setText("Weight:")
+            self.weight_spinbox.setRange(0, 10000)
 
 class AdditiveInputWidget(QWidget):
     """Widget for adding recipe additives"""
@@ -561,3 +586,131 @@ class RecipeManagementWidget(QWidget):
             filepath = self.recipes_table.item(self.recipes_table.currentRow(), 1).text()
             if self.recipe_manager.delete_recipe(filepath):
                 self.refresh_recipe_list()
+
+
+class RecipeNotesWidget(QWidget):
+    """Widget for recipe notes and instructions"""
+    
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Recipe Notes & Instructions:"))
+        
+        self.notes_area = QTextEdit()
+        self.notes_area.setPlaceholderText("Enter your process notes, temperature observations, and instructions here...")
+        layout.addWidget(self.notes_area)
+        
+        self.setLayout(layout)
+    
+    def get_notes(self) -> str:
+        return self.notes_area.toPlainText()
+    
+    def set_notes(self, text: str):
+        self.notes_area.setPlainText(text)
+
+
+class RecipeReportWidget(QWidget):
+    """Widget for viewing and printing the recipe"""
+    
+    def __init__(self, calculator: SoapCalculator):
+        super().__init__()
+        self.calculator = calculator
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # Toolbar
+        btn_layout = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh View")
+        refresh_btn.clicked.connect(lambda: self.refresh_report())
+        btn_layout.addWidget(refresh_btn)
+        
+        if _HAS_PRINTER:
+            print_btn = QPushButton("Print / Save PDF")
+            print_btn.clicked.connect(self.print_report)
+            btn_layout.addWidget(print_btn)
+        
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+        # Viewer
+        self.viewer = QTextBrowser()
+        layout.addWidget(self.viewer)
+        
+        self.setLayout(layout)
+    
+    def refresh_report(self, recipe_name="Current Recipe", notes=""):
+        """Generate HTML report"""
+        props = self.calculator.get_batch_properties()
+        unit = self.calculator.unit_system
+        unit_abbr = self.calculator.get_unit_abbreviation()
+        
+        # Helper to format weight
+        def fmt(w):
+            return f"{self.calculator.convert_weight(w, unit):.2f}"
+        
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: sans-serif; color: #000; background-color: #fff; }}
+                h1 {{ color: #2c3e50; border-bottom: 2px solid #2c3e50; }}
+                h2 {{ color: #34495e; margin-top: 20px; border-bottom: 1px solid #ddd; }}
+                table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; }}
+                th {{ text-align: left; background-color: #f2f2f2; padding: 8px; border-bottom: 1px solid #ddd; }}
+                td {{ padding: 8px; border-bottom: 1px solid #eee; }}
+                .highlight {{ font-weight: bold; color: #2980b9; }}
+                .notes {{ background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; }}
+            </style>
+        </head>
+        <body>
+            <h1>{recipe_name}</h1>
+            
+            <h2>Batch Details</h2>
+            <p>
+                <b>Superfat:</b> {self.calculator.superfat_percent}% &nbsp;|&nbsp; 
+                <b>Lye Type:</b> {self.calculator.lye_type} &nbsp;|&nbsp; 
+                <b>Water Method:</b> {self.calculator.water_calc_method}
+            </p>
+            
+            <h2>Oils</h2>
+            <table>
+                <tr><th>Oil Name</th><th>Weight ({unit_abbr})</th><th>%</th></tr>
+        """
+        
+        total_oil = props['total_oil_weight']
+        for name, weight in self.calculator.oils.items():
+            pct = (weight / total_oil * 100) if total_oil > 0 else 0
+            html += f"<tr><td>{name}</td><td>{fmt(weight)}</td><td>{pct:.1f}%</td></tr>"
+            
+        html += f"""
+            </table>
+            
+            <h2>Lye & Liquids</h2>
+            <table>
+                <tr><td><b>Water / Liquid Amount:</b></td><td class="highlight">{fmt(props['water_weight'])} {unit_abbr}</td></tr>
+                <tr><td><b>Lye Amount:</b></td><td class="highlight">{fmt(props['lye_weight'])} {unit_abbr}</td></tr>
+                <tr><td><b>Total Batch Weight:</b></td><td>{fmt(props['total_batch_weight'])} {unit_abbr}</td></tr>
+            </table>
+        """
+        
+        if self.calculator.additives:
+            html += "<h2>Additives</h2><table><tr><th>Additive</th><th>Amount</th></tr>"
+            for name, weight in self.calculator.additives.items():
+                html += f"<tr><td>{name}</td><td>{fmt(weight)} {unit_abbr}</td></tr>"
+            html += "</table>"
+            
+        if notes:
+            html += f"<h2>Instructions & Notes</h2><div class='notes'><pre>{notes}</pre></div>"
+            
+        html += "</body></html>"
+        self.viewer.setHtml(html)
+
+    def print_report(self):
+        if not _HAS_PRINTER:
+            return
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() == QPrintDialog.DialogCode.Accepted:
+            self.viewer.print(printer)

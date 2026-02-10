@@ -13,7 +13,8 @@ from src.models import SoapCalculator, Recipe, RecipeManager
 from src.data import get_all_oil_names
 from .widgets import (
     OilInputWidget, CalculationResultsWidget, SettingsWidget,
-    RecipeManagementWidget, AdditiveInputWidget, RecipeParametersWidget
+    RecipeManagementWidget, AdditiveInputWidget, RecipeParametersWidget,
+    RecipeNotesWidget, RecipeReportWidget
 )
 from .widgets import FABreakdownWidget
 
@@ -175,6 +176,14 @@ class MainWindow(QMainWindow):
         fa_tab = self.create_fa_tab()
         tabs.addTab(fa_tab, "FA Breakdown")
         
+        # Notes Tab
+        self.notes_tab = self.create_notes_tab()
+        tabs.addTab(self.notes_tab, "Notes")
+        
+        # View/Print Tab
+        self.print_tab = self.create_print_tab()
+        tabs.addTab(self.print_tab, "View / Print")
+        
         # Recipe Management Tab
         management_tab = self.create_management_tab()
         tabs.addTab(management_tab, "Recipe Management")
@@ -184,6 +193,10 @@ class MainWindow(QMainWindow):
         tabs.addTab(settings_tab, "Settings")
         
         main_layout.addWidget(tabs)
+        
+        # Connect tab change to refresh print view
+        tabs.currentChanged.connect(self.on_tab_changed)
+        self.tabs = tabs
         
         # Status bar
         self.statusBar().showMessage("Ready")
@@ -266,6 +279,9 @@ class MainWindow(QMainWindow):
         scale_layout.addWidget(scale_btn)
         right_layout.addLayout(scale_layout)
         
+        # Connect percentage callback to use the scale spinbox as target weight
+        self.oil_input_widget.target_weight_callback = self.get_target_batch_weight
+        
         # Recipe management buttons
         right_layout.addWidget(QLabel("Recipe Operations:"))
         button_layout = QHBoxLayout()
@@ -328,6 +344,24 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
     
+    def create_notes_tab(self):
+        """Create the recipe notes tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.notes_widget = RecipeNotesWidget()
+        layout.addWidget(self.notes_widget)
+        tab.setLayout(layout)
+        return tab
+
+    def create_print_tab(self):
+        """Create the view/print tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.report_widget = RecipeReportWidget(self.calculator)
+        layout.addWidget(self.report_widget)
+        tab.setLayout(layout)
+        return tab
+    
     def connect_signals(self):
         """Connect widget signals to slots"""
         # Sync settings to calculator first
@@ -349,6 +383,13 @@ class MainWindow(QMainWindow):
         # ensure tables update when settings change (units etc.)
         self.settings_widget.settings_changed.connect(self.update_oils_table)
         self.settings_widget.settings_changed.connect(self.update_additives_table)
+
+    def on_tab_changed(self, index):
+        """Handle tab changes"""
+        # If switching to Print tab (index check or widget check)
+        if self.tabs.widget(index) == self.print_tab:
+            notes = self.notes_widget.get_notes()
+            self.report_widget.refresh_report(self.current_recipe.name or "Current Recipe", notes)
 
     def get_theme_colors(self, name):
         """Get colors for theme name"""
@@ -450,6 +491,11 @@ class MainWindow(QMainWindow):
         self.update_oils_table()
         self.update_additives_table()
     
+    def get_target_batch_weight(self):
+        """Get target batch weight in grams for percentage calculations"""
+        val = self.scale_spinbox.value()
+        return self.calculator.convert_to_grams(val, self.calculator.unit_system)
+    
     def scale_recipe(self):
         """Scale recipe to new weight"""
         new_weight = self.scale_spinbox.value()
@@ -466,6 +512,7 @@ class MainWindow(QMainWindow):
         # Reset existing calculator state instead of replacing instance
         self.calculator.oils.clear()
         self.calculator.additives.clear()
+        self.notes_widget.set_notes("")
         self.current_recipe = Recipe()
         # Reload defaults (this also updates results)
         self.load_preferences()
@@ -490,6 +537,7 @@ class MainWindow(QMainWindow):
                     with open(filepath, 'r') as f:
                         data = json.load(f)
                     data['additives'] = self.calculator.additives
+                    data['notes'] = self.notes_widget.get_notes()
                     with open(filepath, 'w') as f:
                         json.dump(data, f, indent=4)
                 except Exception as e:
@@ -518,6 +566,10 @@ class MainWindow(QMainWindow):
                     data = json.load(f)
                     if 'additives' in data:
                         self.calculator.additives = data['additives']
+                    if 'notes' in data:
+                        self.notes_widget.set_notes(data['notes'])
+                    else:
+                        self.notes_widget.set_notes("")
             except Exception as e:
                 print(f"Error loading additives from JSON: {e}")
             
