@@ -10,13 +10,13 @@ class SoapCalculator:
     def __init__(self):
         self.oils = {}  # {oil_name: weight_in_grams}
         self.superfat_percent = 5.0  # Default 5% superfat
-        self.water_to_lye_ratio = 2.0  # Default 2:1 water to lye
+        self.water_to_lye_ratio = 1.0  # Default 1:1 water to lye
         self.lye_type = "NaOH"  # NaOH, KOH, or 90% KOH
         self.total_batch_weight = 0.0
-        self.unit_system = "grams"  # "grams", "ounces", "pounds"
-        self.water_calc_method = "ratio"  # "ratio", "percent", "concentration"
-        self.water_percent = 30.0  # % of oils (used when water_calc_method = "percent")
-        self.lye_concentration = 33.0  # % concentration (used when water_calc_method = "concentration")
+        self.unit_system = "ounces"  # "grams", "ounces", "pounds"
+        self.water_calc_method = "percent"  # "ratio", "percent", "concentration"
+        self.water_percent = 38.0  # % of oils (used when water_calc_method = "percent")
+        self.lye_concentration = 27.0  # % concentration (used when water_calc_method = "concentration")
         self.additives = {}  # {name: weight_in_grams or percent_of_oils}
     
     def add_oil(self, oil_name: str, weight: float):

@@ -113,6 +113,19 @@ class OilInputWidget(QWidget):
         else:
             self.weight_label.setText("Weight:")
             self.weight_spinbox.setRange(0, 10000)
+            
+    def refresh_oils(self):
+        """Refresh the oil list from database"""
+        current = self.oil_combo.currentText()
+        self.oil_combo.clear()
+        names = get_all_oil_names()
+        self.oil_combo.addItems(names)
+        self.oil_combo.setCurrentText(current)
+        
+        completer = QCompleter(names)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.oil_combo.setCompleter(completer)
 
 class AdditiveInputWidget(QWidget):
     """Widget for adding recipe additives"""
@@ -216,6 +229,19 @@ class AdditiveInputWidget(QWidget):
         """Update default unit selection based on global settings"""
         unit_map = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
         self.add_unit_combo.setCurrentText(unit_map.get(unit_system, "g"))
+        
+    def refresh_additives(self):
+        """Refresh the additive list from database"""
+        current = self.add_combo.currentText()
+        self.add_combo.clear()
+        names = get_all_additive_names()
+        self.add_combo.addItems(names)
+        self.add_combo.setCurrentText(current)
+        
+        completer = QCompleter(names)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.add_combo.setCompleter(completer)
 
 
 class FragranceWidget(QWidget):
@@ -236,19 +262,29 @@ class FragranceWidget(QWidget):
         self.name_combo = QComboBox()
         self.name_combo.setEditable(True)
         self.name_combo.addItems(["Lavender EO", "Peppermint EO", "Tea Tree EO", "Lemon EO", "Orange EO", "Fragrance Oil"])
-        self.name_combo.setCurrentIndex(-1)
+        self.name_combo.setCurrentIndex(5)
         self.name_combo.setPlaceholderText("e.g. Lavender EO")
         layout.addWidget(self.name_combo, 0, 1)
         
         layout.addWidget(QLabel("Usage Rate:"), 1, 0)
+        
+        # Rate input with unit selector
+        rate_layout = QHBoxLayout()
+        rate_layout.setContentsMargins(0,0,0,0)
         self.rate_spin = QDoubleSpinBox()
-        self.rate_spin.setRange(0, 15) 
-        self.rate_spin.setSingleStep(0.1)
-        self.rate_spin.setValue(3.0) 
-        self.rate_spin.setSuffix("%")
-        self.rate_spin.setToolTip("Typical rates: EO (0.5-3%), FO (3-6%)")
+        self.rate_spin.setSuffix("") 
+        self.rate_spin.setToolTip("Default: 0.5 oz/lb")
+        self.rate_spin.setRange(0, 10) 
+        self.rate_spin.setSingleStep(0.05)
+        self.rate_spin.setValue(0.50) 
         self.rate_spin.valueChanged.connect(self.update_calculation)
-        layout.addWidget(self.rate_spin, 1, 1)
+        rate_layout.addWidget(self.rate_spin)
+        self.rate_unit_combo = QComboBox()
+        self.rate_unit_combo.addItems(["%", "oz/lb", "g/kg"])
+        self.rate_unit_combo.setCurrentText("oz/lb")
+        self.rate_unit_combo.currentTextChanged.connect(self.on_rate_unit_changed)
+        rate_layout.addWidget(self.rate_unit_combo)
+        layout.addLayout(rate_layout, 1, 1)
         
         layout.addWidget(QLabel("Required Amount:"), 2, 0)
         self.amount_lbl = QLabel("0.00 g")
@@ -266,11 +302,46 @@ class FragranceWidget(QWidget):
         main_layout.addWidget(group)
         self.setLayout(main_layout)
         
+    def on_rate_unit_changed(self, unit: str):
+        """Update spinbox settings and defaults based on unit"""
+        self.rate_spin.blockSignals(True)
+        if unit == "%":
+            self.rate_spin.setSuffix("%")
+            self.rate_spin.setRange(0, 100)
+            self.rate_spin.setValue(3.0) # Change this value to match your default
+            self.rate_spin.setToolTip("Typical: 3-6%")
+        elif unit == "oz/lb":
+            self.rate_spin.setSuffix("")
+            self.rate_spin.setRange(0, 10)
+            self.rate_spin.setValue(0.5) # SoapCalc Default
+            self.rate_spin.setToolTip("SoapCalc Default: 0.5 oz/lb")
+        elif unit == "g/kg":
+            self.rate_spin.setSuffix("")
+            self.rate_spin.setRange(0, 1000)
+            self.rate_spin.setValue(31.0) # SoapCalc Default
+            self.rate_spin.setToolTip("SoapCalc Default: 31 g/kg")
+        self.rate_spin.blockSignals(False)
+        self.update_calculation()
+
     def update_calculation(self):
         """Recalculate amount based on current total oils"""
         rate = self.rate_spin.value()
+        unit_mode = self.rate_unit_combo.currentText()
         total_oil = self.calculator.get_total_oil_weight()
         amount_grams = total_oil * (rate / 100.0)
+        
+        amount_grams = 0.0
+        if unit_mode == "%":
+            amount_grams = total_oil * (rate / 100.0)
+        elif unit_mode == "oz/lb":
+            # Convert total oil to lbs, multiply by rate (oz), convert result to grams
+            total_lbs = total_oil / 453.592
+            amount_oz = total_lbs * rate
+            amount_grams = amount_oz * 28.3495
+        elif unit_mode == "g/kg":
+            # Convert total oil to kg, multiply by rate
+            total_kg = total_oil / 1000.0
+            amount_grams = total_kg * rate
         
         unit = self.calculator.unit_system
         display_amount = self.calculator.convert_weight(amount_grams, unit)
@@ -280,8 +351,20 @@ class FragranceWidget(QWidget):
 
     def add_fragrance(self):
         rate = self.rate_spin.value()
+        unit_mode = self.rate_unit_combo.currentText()
         total_oil = self.calculator.get_total_oil_weight()
         amount_grams = total_oil * (rate / 100.0)
+        
+        amount_grams = 0.0
+        if unit_mode == "%":
+            amount_grams = total_oil * (rate / 100.0)
+        elif unit_mode == "oz/lb":
+            total_lbs = total_oil / 453.592
+            amount_oz = total_lbs * rate
+            amount_grams = amount_oz * 28.3495
+        elif unit_mode == "g/kg":
+            total_kg = total_oil / 1000.0
+            amount_grams = total_kg * rate
         
         if amount_grams > 0:
             name = self.name_combo.currentText()
@@ -300,11 +383,24 @@ class CalculationResultsWidget(QWidget):
         super().__init__()
         self.calculator = calculator
         self.cost_manager = cost_manager
+        # Cache for internal updates
+        self.last_properties = {}
+        self.last_unit = "grams"
+        self.last_name = None
         self.setup_ui()
     
     def setup_ui(self):
         """Setup results display"""
         layout = QVBoxLayout()
+        
+        # Recipe Name Display
+        self.recipe_name_label = QLabel("Unsaved Recipe")
+        self.recipe_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = self.recipe_name_label.font()
+        font.setBold(True)
+        font.setPointSize(12)
+        self.recipe_name_label.setFont(font)
+        layout.addWidget(self.recipe_name_label)
         
         # Batch Weights
         self.weights_group = QGroupBox("Batch Weights")
@@ -323,6 +419,23 @@ class CalculationResultsWidget(QWidget):
         self.weights_group.setLayout(w_layout)
         layout.addWidget(self.weights_group)
         
+        # Yield / Bar Estimation
+        self.yield_group = QGroupBox("Yield Estimation")
+        y_layout = QGridLayout()
+        
+        y_layout.addWidget(QLabel("Bar Size:"), 0, 0)
+        self.bar_size_spin = QDoubleSpinBox()
+        self.bar_size_spin.setRange(0.1, 5000)
+        self.bar_size_spin.setSingleStep(0.5)
+        self.bar_size_spin.setValue(4.5)
+        self.bar_size_spin.valueChanged.connect(lambda: self.update_results(self.last_properties, self.last_unit, self.last_name))
+        y_layout.addWidget(self.bar_size_spin, 0, 1)
+        
+        self.yield_label = QLabel("0.0 bars")
+        y_layout.addWidget(self.yield_label, 0, 2)
+        self.yield_group.setLayout(y_layout)
+        layout.addWidget(self.yield_group)
+
         # Predicted Qualities
         self.qualities_group = QGroupBox("Soap Bar Quality")
         q_layout = QGridLayout()
@@ -360,14 +473,23 @@ class CalculationResultsWidget(QWidget):
         layout.addStretch()
         self.setLayout(layout)
     
-    def update_results(self, properties: dict, unit_system: str = "grams"):
+    def update_results(self, properties: dict, unit_system: str = "grams", recipe_name: str = None):
         """Update displayed results"""
+        # Cache values for internal recalculation (e.g. when bar size changes)
+        self.last_properties = properties
+        self.last_unit = unit_system
+        self.last_name = recipe_name
+
         unit_abbr = {
             "grams": "g",
             "ounces": "oz",
             "pounds": "lbs"
         }.get(unit_system, "g")
         
+        # Update recipe name if provided
+        if recipe_name is not None:
+            self.recipe_name_label.setText(recipe_name if recipe_name else "Unsaved Recipe")
+
         # Convert values if needed
         def convert_weight(grams):
             if unit_system == "grams":
@@ -391,12 +513,18 @@ class CalculationResultsWidget(QWidget):
             lye_type = self.calculator.lye_type
             total_cost += lye_weight * self.cost_manager.get_cost_per_gram(lye_type)
         
+        # Calculate Total Weight including Additives (Fragrance, etc.)
+        # properties['total_batch_weight'] usually contains just Oils + Water + Lye
+        additive_weight = sum(self.calculator.additives.values())
+        true_total_weight = properties['total_batch_weight'] + additive_weight
+
         # Batch Weights
         weights_map = {
             "Total Oil Weight": properties['total_oil_weight'],
             "Water Weight": properties['water_weight'],
             "Lye Weight": properties['lye_weight'],
-            "Total Batch Weight": properties['total_batch_weight'],
+            # Use the true total that includes fragrance
+            "Total Batch Weight": true_total_weight,
             "Total Batch Cost": total_cost
         }
         
@@ -407,6 +535,17 @@ class CalculationResultsWidget(QWidget):
                 else:
                     self.weight_labels[key].setText(f"{convert_weight(val)} {unit_abbr}")
             
+        # Update Yield Calculation
+        bar_size = self.bar_size_spin.value()
+        if bar_size > 0:
+            # Convert bar size input (which is in display units) to grams for calculation if needed, 
+            # or just convert total weight to display units.
+            # Easier: Convert total weight to display units first.
+            total_display_weight = float(convert_weight(true_total_weight))
+            bar_count = total_display_weight / bar_size
+            self.yield_label.setText(f"Est: {bar_count:.1f} bars")
+            self.bar_size_spin.setSuffix(f" {unit_abbr}")
+
         # Soap Qualities
         qualities = properties.get('relative_qualities', {})
         
@@ -632,11 +771,6 @@ class SettingsWidget(QWidget):
         theme_layout.addWidget(self.theme_combo)
         layout.addLayout(theme_layout)
         
-        # Custom Ingredients Button
-        custom_btn = QPushButton("Manage Custom Ingredients")
-        custom_btn.clicked.connect(self.open_ingredient_editor)
-        layout.addWidget(custom_btn)
-        
         layout.addStretch()
         self.setLayout(layout)
     
@@ -649,11 +783,6 @@ class SettingsWidget(QWidget):
     def on_theme_changed(self, theme_text: str):
         """Handle theme accent change"""
         self.settings_changed.emit()
-        
-    def open_ingredient_editor(self):
-        from src.ui.ingredient_editor import IngredientEditorDialog
-        dialog = IngredientEditorDialog(self)
-        dialog.exec()
 
 
 class RecipeManagementWidget(QWidget):
@@ -933,3 +1062,16 @@ class InventoryCostWidget(QWidget):
             self.cost_table.setItem(i, 1, QTableWidgetItem(f"${price:.2f}"))
             self.cost_table.setItem(i, 2, QTableWidgetItem(f"{qty} {unit}"))
             self.cost_table.setItem(i, 3, QTableWidgetItem(f"${cost_per_g:.4f}"))
+            
+    def refresh_ingredients(self):
+        """Refresh ingredient list"""
+        current = self.ingredient_combo.currentText()
+        self.ingredient_combo.clear()
+        items = sorted(get_all_oil_names() + get_all_additive_names() + ["NaOH", "KOH", "90% KOH"])
+        self.ingredient_combo.addItems(items)
+        self.ingredient_combo.setCurrentText(current)
+        
+        completer = QCompleter(items)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.ingredient_combo.setCompleter(completer)

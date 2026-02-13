@@ -19,6 +19,9 @@ class Recipe:
         self.lye_type = "NaOH"
         self.notes = ""
         self.batch_weight = 0.0
+        self.water_calc_method = "ratio"
+        self.water_percent = 38.0
+        self.lye_concentration = 30.0
     
     def to_dict(self) -> dict:
         """Convert recipe to dictionary"""
@@ -32,6 +35,9 @@ class Recipe:
             "lye_type": self.lye_type,
             "notes": self.notes,
             "batch_weight": self.batch_weight,
+            "water_calc_method": self.water_calc_method,
+            "water_percent": self.water_percent,
+            "lye_concentration": self.lye_concentration,
         }
     
     @classmethod
@@ -46,6 +52,9 @@ class Recipe:
         recipe.lye_type = data.get("lye_type", "NaOH")
         recipe.notes = data.get("notes", "")
         recipe.batch_weight = data.get("batch_weight", 0.0)
+        recipe.water_calc_method = data.get("water_calc_method", "ratio")
+        recipe.water_percent = data.get("water_percent", 38.0)
+        recipe.lye_concentration = data.get("lye_concentration", 30.0)
         return recipe
 
 

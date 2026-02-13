@@ -15,7 +15,7 @@ from src.models.cost_manager import CostManager
 from src.data import get_all_oil_names
 from .widgets import (
     OilInputWidget, CalculationResultsWidget, SettingsWidget,
-    RecipeManagementWidget, AdditiveInputWidget, RecipeParametersWidget,
+    AdditiveInputWidget, RecipeParametersWidget,
     RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget, FragranceWidget
 )
 from .widgets import FABreakdownWidget
@@ -191,10 +191,6 @@ class MainWindow(QMainWindow):
         self.inventory_tab = self.create_inventory_tab()
         tabs.addTab(self.inventory_tab, "Inventory/Cost")
         
-        # Recipe Management Tab
-        management_tab = self.create_management_tab()
-        tabs.addTab(management_tab, "Recipe Management")
-        
         # Settings Tab
         settings_tab = self.create_settings_tab()
         tabs.addTab(settings_tab, "Settings")
@@ -259,6 +255,11 @@ class MainWindow(QMainWindow):
         remove_oil_btn = QPushButton("Remove Selected Oil")
         remove_oil_btn.clicked.connect(self.remove_selected_oil)
         col2_layout.addWidget(remove_oil_btn)
+        
+        # Manage Ingredients Button
+        manage_ing_btn = QPushButton("Manage Custom Ingredients")
+        manage_ing_btn.clicked.connect(self.open_ingredient_editor)
+        col2_layout.addWidget(manage_ing_btn)
 
         # Additives Input Area
         self.additive_widget = AdditiveInputWidget(self.calculator)
@@ -294,7 +295,7 @@ class MainWindow(QMainWindow):
         scale_layout.addWidget(self.scale_label)
         self.scale_spinbox = QDoubleSpinBox()
         self.scale_spinbox.setRange(0, 10000)
-        self.scale_spinbox.setValue(42)
+        self.scale_spinbox.setValue(32)
         scale_layout.addWidget(self.scale_spinbox)
         scale_btn = QPushButton("Scale Recipe")
         scale_btn.clicked.connect(self.scale_recipe)
@@ -330,9 +331,9 @@ class MainWindow(QMainWindow):
         splitter.addWidget(col1_scroll)
         splitter.addWidget(col2_widget)
         splitter.addWidget(col3_scroll)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setStretchFactor(2, 1)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(2, 4)
         
         layout.addWidget(splitter)
         tab.setLayout(layout)
@@ -350,17 +351,6 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
     
-    def create_management_tab(self):
-        """Create the recipe management tab"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-        
-        self.management_widget = RecipeManagementWidget(self.recipe_manager, self)
-        layout.addWidget(self.management_widget)
-        
-        tab.setLayout(layout)
-        return tab
-
     def create_fa_tab(self):
         """Create the fatty-acid breakdown tab"""
         tab = QWidget()
@@ -526,7 +516,7 @@ class MainWindow(QMainWindow):
     def update_results(self):
         """Update calculation results"""
         properties = self.calculator.get_batch_properties()
-        self.results_widget.update_results(properties, self.calculator.unit_system)
+        self.results_widget.update_results(properties, self.calculator.unit_system, self.current_recipe.name)
         # update FA breakdown tab if present
         try:
             if hasattr(self, 'fa_widget') and self.fa_widget:
@@ -577,6 +567,9 @@ class MainWindow(QMainWindow):
             self.current_recipe.superfat_percent = self.calculator.superfat_percent
             self.current_recipe.water_to_lye_ratio = self.calculator.water_to_lye_ratio
             self.current_recipe.lye_type = self.calculator.lye_type
+            self.current_recipe.water_calc_method = self.calculator.water_calc_method
+            self.current_recipe.water_percent = self.calculator.water_percent
+            self.current_recipe.lye_concentration = self.calculator.lye_concentration
             
             filepath = self.recipe_manager.save_recipe(self.current_recipe)
             
@@ -593,6 +586,7 @@ class MainWindow(QMainWindow):
                     print(f"Error saving additives to JSON: {e}")
             
             self.statusBar().showMessage(f"Recipe saved to {filepath}")
+            self.update_results()
     
     def load_recipe(self):
         """Load recipe from file"""
@@ -873,6 +867,18 @@ class MainWindow(QMainWindow):
             name = keys[row]
             self.calculator.remove_additive(name)
             self.update_results()
+            
+    def open_ingredient_editor(self):
+        """Open the custom ingredient editor dialog"""
+        from src.ui.ingredient_editor import IngredientEditorDialog
+        dialog = IngredientEditorDialog(self)
+        dialog.exec()
+        
+        # Refresh lists in UI widgets
+        self.oil_input_widget.refresh_oils()
+        self.additive_widget.refresh_additives()
+        if hasattr(self, 'inventory_widget'):
+            self.inventory_widget.refresh_ingredients()
     
     @staticmethod
     def _show_recipe_name_dialog(title: str, default: str = "") -> tuple:

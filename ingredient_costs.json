@@ -4,11 +4,6 @@
         "quantity": 101.0,
         "unit": "fl oz"
     },
-    "Coconut Oil": {
-        "price": 24.98,
-        "quantity": 128.0,
-        "unit": "fl oz"
-    },
     "Shea Butter": {
         "price": 19.99,
         "quantity": 2.0,
@@ -32,6 +27,11 @@
     "Kaolin Clay": {
         "price": 8.99,
         "quantity": 3.5,
+        "unit": "oz"
+    },
+    "Coconut Oil, 76 deg (Unrefined)": {
+        "price": 24.98,
+        "quantity": 128.0,
         "unit": "oz"
     }
 }

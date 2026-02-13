@@ -81,8 +81,8 @@ class LauncherWindow(QWidget):
         colors = themes.get(theme_name, themes["Blue"])
         accent = colors["accent"]
         
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background-color: #1e1e1e;
                 color: #e0e0e0;
             }}
