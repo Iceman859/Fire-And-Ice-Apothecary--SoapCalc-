@@ -1406,6 +1406,12 @@ class InventoryCostWidget(QWidget):
         save_btn.setStyleSheet("background-color: #388e3c; color: white;")
         btn_layout.addWidget(save_btn)
 
+        restock_btn = QPushButton("Restock (Add)")
+        restock_btn.setToolTip("Add to existing inventory (Weighted Average Cost)")
+        restock_btn.clicked.connect(self.restock_inventory)
+        restock_btn.setStyleSheet("background-color: #1976d2; color: white;")
+        btn_layout.addWidget(restock_btn)
+
         form_layout.addLayout(btn_layout, 4, 0, 1, 2)
 
         form_group.setLayout(form_layout)
@@ -1438,6 +1444,19 @@ class InventoryCostWidget(QWidget):
 
         if name and qty > 0:
             self.cost_manager.set_cost(name, price, qty, unit)
+            self.refresh_table()
+            self.clear_form()
+            self.costs_changed.emit()
+
+    def restock_inventory(self):
+        """Add to existing inventory (Weighted Average)"""
+        name = self.ingredient_combo.currentText()
+        price = self.price_spin.value()
+        qty = self.qty_spin.value()
+        unit = self.unit_combo.currentText()
+
+        if name and qty > 0:
+            self.cost_manager.add_stock(name, price, qty, unit)
             self.refresh_table()
             self.clear_form()
             self.costs_changed.emit()

@@ -1,9 +1,4 @@
 {
-    "Olive Oil": {
-        "price": 22.98,
-        "quantity": 76.46,
-        "unit": "fl oz"
-    },
     "Shea Butter": {
         "price": 19.99,
         "quantity": 1.0,
@@ -37,6 +32,11 @@
     "Coconut Oil": {
         "price": 24.98,
         "quantity": 109.44,
+        "unit": "oz"
+    },
+    "Olive Oil": {
+        "price": 22.98,
+        "quantity": 101.0,
         "unit": "oz"
     }
 }

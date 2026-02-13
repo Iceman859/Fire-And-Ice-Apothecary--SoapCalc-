@@ -52,6 +52,35 @@ class CostManager:
         self.costs[name] = {"price": price, "quantity": quantity, "unit": unit}
         self.save_costs()
 
+    def add_stock(self, name: str, price: float, quantity: float, unit: str):
+        """
+        Add new stock to existing inventory using Weighted Average Cost.
+        """
+        if name not in self.costs:
+            self.set_cost(name, price, quantity, unit)
+            return
+
+        # Get current state
+        current_data = self.costs[name]
+        current_unit = current_data.get("unit", "grams")
+        current_qty = float(current_data.get("quantity", 0.0))
+        current_total_value = float(current_data.get("price", 0.0))
+
+        # Convert both to grams for calculation to ensure accuracy across units
+        current_grams = self._convert_to_grams(current_qty, current_unit)
+        added_grams = self._convert_to_grams(quantity, unit)
+
+        new_grams = current_grams + added_grams
+        new_total_value = current_total_value + price
+
+        # Update (storing as grams to avoid unit confusion)
+        self.costs[name] = {
+            "price": round(new_total_value, 2),
+            "quantity": round(new_grams, 2),
+            "unit": "grams",
+        }
+        self.save_costs()
+
     def get_cost_data(self, name: str) -> Optional[Dict[str, Any]]:
         """Get raw cost data for an ingredient."""
         return self.costs.get(name)

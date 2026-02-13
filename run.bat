@@ -1,5 +1,5 @@
 @echo off
-REM SoapCalc - Soap Making Calculator
+REM Fire & Ice Apothecary
 REM This batch file runs the application using the Python virtual environment
 
 cd /d "%~dp0"

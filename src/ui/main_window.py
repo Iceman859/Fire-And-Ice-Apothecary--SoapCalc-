@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Fire & Ice Apothecary (Soap Calculator)")
+        self.setWindowTitle("Fire & Ice Apothecary")
         self.setGeometry(100, 100, 1400, 900)
         self.showMaximized()
 
@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout()
 
         # Title
-        title = QLabel("Fire & Ice Apothecary - Soap Calculator")
+        title = QLabel("Fire & Ice Apothecary")
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
@@ -202,7 +202,7 @@ class MainWindow(QMainWindow):
 
         # FA Breakdown Tab
         fa_tab = self.create_fa_tab()
-        tabs.addTab(fa_tab, "FA Breakdown")
+        tabs.addTab(fa_tab, "Fatty Acid Breakdown")
 
         # Notes Tab
         self.notes_tab = self.create_notes_tab()

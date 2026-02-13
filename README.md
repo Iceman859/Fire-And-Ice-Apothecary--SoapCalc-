@@ -1,14 +1,14 @@
-# Fire and Ice Apothecary - SoapCalc
+# Fire and Ice Apothecary
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/License-Open%20Source-green)
 ![Status](https://img.shields.io/badge/Status-Active-success)
 
-A comprehensive Python GUI application for soap making calculations and recipe management. Designed to provide professional-grade tools for modern soap makers, extending the classic functionality of SoapCalc with a modern interface and advanced features.
+A comprehensive Python GUI application for soap making calculations and recipe management. Designed to provide professional-grade tools for modern soap makers.
 
 ## 🚀 Overview
 
-**Fire and Ice Apothecary - SoapCalc** empowers soap makers to formulate, calculate, and manage soap recipes with precision.
+**Fire and Ice Apothecary** empowers soap makers to formulate, calculate, and manage soap recipes with precision.
 
 - **Calculate** lye and water requirements instantly.
 - **Manage** a custom database of oils and additives.

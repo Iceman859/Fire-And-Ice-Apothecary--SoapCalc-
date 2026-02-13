@@ -1,6 +1,6 @@
-# SoapCalc Python GUI Application
+# Soapmaking Python GUI Application
 
-A Python-based GUI application that replicates the functionality of SoapCalc, a soap making calculator. This application provides comprehensive tools for soap makers to calculate lye quantities, water amounts, and manage soap recipes.
+A Python-based GUI application for soap making. This application provides comprehensive tools for soap makers to calculate lye quantities, water amounts, and manage soap recipes.
 
 ## Project Overview
 
@@ -19,7 +19,7 @@ A Python-based GUI application that replicates the functionality of SoapCalc, a 
 ## Project Structure
 
 ```
-Fire And Ice Apothecary (SoapCalc)/
+Fire And Ice Apothecary/
 ├── src/
 │   ├── ui/                 # PyQt6 GUI components
 │   ├── models/             # Data models for calculations
