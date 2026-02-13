@@ -173,12 +173,12 @@ OILS = {
         "fa": {"lauric": 0, "myristic": 0, "palmitic": 28, "stearic": 33, "ricinoleic": 0, "oleic": 35, "linoleic": 3, "linolenic": 0},
         "qualities": _calc_qualities({"lauric": 0, "myristic": 0, "palmitic": 28, "stearic": 33, "ricinoleic": 0, "oleic": 35, "linoleic": 3, "linolenic": 0})
     },
-    "Coconut Oil, 76 deg (Unrefined)": {
+    "Coconut Oil": {
         "sap_koh": 0.257, "sap_naoh": 0.183, "iodine": 10, "ins": 258,
         "fa": {"lauric": 48, "myristic": 19, "palmitic": 9, "stearic": 3, "ricinoleic": 0, "oleic": 8, "linoleic": 2, "linolenic": 0},
         "qualities": _calc_qualities({"lauric": 48, "myristic": 19, "palmitic": 9, "stearic": 3, "ricinoleic": 0, "oleic": 8, "linoleic": 2, "linolenic": 0})
     },
-    "Coconut Oil, 92 deg (Hydrogenated)": {
+    "Coconut Oil, (Hydrogenated)": {
         "sap_koh": 0.257, "sap_naoh": 0.183, "iodine": 3, "ins": 258,
         "fa": {"lauric": 48, "myristic": 19, "palmitic": 9, "stearic": 3, "ricinoleic": 0, "oleic": 8, "linoleic": 2, "linolenic": 0},
         "qualities": _calc_qualities({"lauric": 48, "myristic": 19, "palmitic": 9, "stearic": 3, "ricinoleic": 0, "oleic": 8, "linoleic": 2, "linolenic": 0})

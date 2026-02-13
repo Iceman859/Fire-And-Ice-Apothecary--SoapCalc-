@@ -1,17 +1,17 @@
 {
     "Olive Oil": {
         "price": 22.98,
-        "quantity": 101.0,
+        "quantity": 76.46,
         "unit": "fl oz"
     },
     "Shea Butter": {
         "price": 19.99,
-        "quantity": 2.0,
+        "quantity": 1.0,
         "unit": "lbs"
     },
     "Castor Oil": {
         "price": 15.29,
-        "quantity": 28.0,
+        "quantity": 24.32,
         "unit": "fl oz"
     },
     "Goat Milk": {
@@ -21,7 +21,7 @@
     },
     "NaOH": {
         "price": 15.99,
-        "quantity": 2.0,
+        "quantity": 1.44,
         "unit": "lbs"
     },
     "Kaolin Clay": {
@@ -29,14 +29,14 @@
         "quantity": 3.5,
         "unit": "oz"
     },
-    "Coconut Oil, 76 deg (Unrefined)": {
-        "price": 24.98,
-        "quantity": 128.0,
-        "unit": "oz"
-    },
     "Oatmeal Milk And Honey (Fragrance Oil)": {
         "price": 12.99,
-        "quantity": 2.0,
+        "quantity": 0.0,
+        "unit": "oz"
+    },
+    "Coconut Oil": {
+        "price": 24.98,
+        "quantity": 109.44,
         "unit": "oz"
     }
 }

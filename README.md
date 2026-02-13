@@ -1,18 +1,42 @@
 # Fire and Ice Apothecary - SoapCalc
 
-A comprehensive Python GUI application for soap making calculations and recipe management, replicating the functionality of SoapCalc.
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![License](https://img.shields.io/badge/License-Open%20Source-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
 
-## Overview
+A comprehensive Python GUI application for soap making calculations and recipe management. Designed to provide professional-grade tools for modern soap makers, extending the classic functionality of SoapCalc with a modern interface and advanced features.
 
-This application provides soap makers with professional-grade tools to:
-- Calculate lye and water requirements for soap recipes
-- Manage an extensive oil database with saponification values
-- Support multiple lye types (NaOH and KOH)
-- Create, save, and load soap recipes
-- Scale recipes for different batch sizes
-- Calculate batch costs and properties
+## 🚀 Overview
 
-## Installation
+**Fire and Ice Apothecary - SoapCalc** empowers soap makers to formulate, calculate, and manage soap recipes with precision.
+
+- **Calculate** lye and water requirements instantly.
+- **Manage** a custom database of oils and additives.
+- **Scale** recipes for any batch size or mold.
+- **Analyze** costs and soap qualities (hardness, cleansing, conditioning).
+
+## ✨ Features
+
+### Core Calculations
+- **Precision Lye Calculator**: Supports Sodium Hydroxide (NaOH) for bar soap, Potassium Hydroxide (KOH) for liquid soap, and dual-lye recipes.
+- **Water Management**: Calculate water based on lye weight, water-to-lye ratio, or lye concentration.
+- **Batch Scaling**: Resize recipes up or down while maintaining exact oil ratios.
+- **Soap Qualities**: Real-time estimation of soap properties:
+  - Hardness, Cleansing, Conditioning, Bubbly, Creamy, Iodine, INS.
+
+### Recipe Management
+- **Save & Load**: Store recipes as JSON files for easy sharing and backup.
+- **Cost Calculation**: Estimate total batch cost and cost-per-bar based on ingredient prices.
+- **Trace Estimates**: Predict trace times based on oil composition.
+- **Import/Export**: Share recipes with the community.
+
+### 🆕 Recent Updates
+*([Edit this section with your latest features])*
+- **UI Overhaul**: Updated PyQt6 interface for better usability.
+- **Performance**: Faster calculation engine.
+- *(Add your new features here, e.g., Fragrance Calculator, Inventory Tracking)*
+
+## 🛠️ Installation
 
 ### Requirements
 - Python 3.8 or higher
@@ -20,14 +44,22 @@ This application provides soap makers with professional-grade tools to:
 
 ### Setup
 
-1. Clone or download this repository
-2. Navigate to the project directory
-3. Install dependencies:
+1.  Clone or download this repository.
+2.  Navigate to the project directory.
+3.  Create and activate a virtual environment (optional but recommended):
+    ```bash
+    python -m venv venv
+    # Windows
+    .\venv\Scripts\activate
+    # Mac/Linux
+    source venv/bin/activate
+    ```
+4.  Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-## Running the Application
+## ▶️ Running the Application
 
 ```bash
 python main.py

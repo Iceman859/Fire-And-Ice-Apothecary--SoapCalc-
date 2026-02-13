@@ -8,14 +8,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from PyQt6.QtWidgets import QApplication
-from src.ui.launcher import LauncherWindow
+from src.ui.main_window import MainWindow
 
 
 def main():
     """Run the application"""
     app = QApplication(sys.argv)
-    launcher = LauncherWindow()
-    launcher.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
 
 
