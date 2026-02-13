@@ -10,11 +10,12 @@ from PyQt6.QtGui import QIcon, QFont
 import json
 
 from src.models import SoapCalculator, Recipe, RecipeManager
+from src.models.cost_manager import CostManager
 from src.data import get_all_oil_names
 from .widgets import (
     OilInputWidget, CalculationResultsWidget, SettingsWidget,
     RecipeManagementWidget, AdditiveInputWidget, RecipeParametersWidget,
-    RecipeNotesWidget, RecipeReportWidget
+    RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget
 )
 from .widgets import FABreakdownWidget
 
@@ -31,6 +32,7 @@ class MainWindow(QMainWindow):
         # Initialize calculator and recipe manager
         self.calculator = SoapCalculator()
         self.recipe_manager = RecipeManager("recipes")
+        self.cost_manager = CostManager()
         self.current_recipe = Recipe()
         # QSettings for persisting preferences across launches
         self._settings = QSettings("FireAndIceApothecary", "SoapCalc")
@@ -184,6 +186,10 @@ class MainWindow(QMainWindow):
         self.print_tab = self.create_print_tab()
         tabs.addTab(self.print_tab, "View / Print")
         
+        # Inventory/Cost Tab
+        self.inventory_tab = self.create_inventory_tab()
+        tabs.addTab(self.inventory_tab, "Inventory/Cost")
+        
         # Recipe Management Tab
         management_tab = self.create_management_tab()
         tabs.addTab(management_tab, "Recipe Management")
@@ -218,11 +224,12 @@ class MainWindow(QMainWindow):
         
         # Table for oils in recipe
         self.oils_table = QTableWidget()
-        self.oils_table.setColumnCount(3)
+        self.oils_table.setColumnCount(4)
         self.update_oils_table_headers()
-        self.oils_table.setColumnWidth(0, 220)
+        self.oils_table.setColumnWidth(0, 200)
         self.oils_table.setColumnWidth(1, 90)
-        self.oils_table.setColumnWidth(2, 100)
+        self.oils_table.setColumnWidth(2, 80)
+        self.oils_table.setColumnWidth(3, 80)
         left_layout.addWidget(self.oils_table)
 
         # enable inline edits and removal for oils
@@ -262,7 +269,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.recipe_settings)
         
         right_layout.addWidget(QLabel("Calculation Results:"))
-        self.results_widget = CalculationResultsWidget(self.calculator)
+        self.results_widget = CalculationResultsWidget(self.calculator, self.cost_manager)
         right_layout.addWidget(self.results_widget)
         
         # Scaling controls
@@ -361,6 +368,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.report_widget)
         tab.setLayout(layout)
         return tab
+
+    def create_inventory_tab(self):
+        """Create the inventory/cost tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.inventory_widget = InventoryCostWidget(self.cost_manager)
+        layout.addWidget(self.inventory_widget)
+        tab.setLayout(layout)
+        return tab
     
     def connect_signals(self):
         """Connect widget signals to slots"""
@@ -456,13 +472,19 @@ class MainWindow(QMainWindow):
             # Convert weight to display unit
             display_weight = self.calculator.convert_weight(weight, self.calculator.unit_system)
 
+            # Calculate cost
+            cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
+            cost = weight * cost_per_g
+
             name_item = QTableWidgetItem(oil_name)
             weight_item = QTableWidgetItem(f"{display_weight:.2f}")
             pct_item = QTableWidgetItem(f"{percentage:.2f}")
+            cost_item = QTableWidgetItem(f"${cost:.2f}")
 
             self.oils_table.setItem(row, 0, name_item)
             self.oils_table.setItem(row, 1, weight_item)
             self.oils_table.setItem(row, 2, pct_item)
+            self.oils_table.setItem(row, 3, cost_item)
 
             self._oils_rows.append(oil_name)
 
@@ -471,7 +493,7 @@ class MainWindow(QMainWindow):
     def update_oils_table_headers(self):
         """Update table headers with current unit"""
         unit_abbr = self.calculator.get_unit_abbreviation()
-        self.oils_table.setHorizontalHeaderLabels(["Oil Name", f"Weight ({unit_abbr})", "% of Oils"])
+        self.oils_table.setHorizontalHeaderLabels(["Oil Name", f"Weight ({unit_abbr})", "% of Oils", "Cost"])
     
     def update_scale_label(self):
         """Update scale label with current unit"""

@@ -1,7 +1,7 @@
 """Calculation models for soap making"""
 
 from typing import Dict, List, Tuple
-from ..data.oils import get_oil_sap
+from ..data.oils import get_oil_sap, SoapMath
 
 
 class SoapCalculator:
@@ -46,21 +46,16 @@ class SoapCalculator:
         if total_oil == 0:
             return 0.0
         
-        # Calculate lye needed to saponify all oils
-        pure_lye = 0.0
-        for oil_name, weight in self.oils.items():
-            sap_value = get_oil_sap(oil_name, self.lye_type)
-            pure_lye += weight * sap_value
+        # Use SoapMath for exact SoapCalc logic
+        # Note: SoapCalc applies superfat as a lye discount
+        koh_purity = 0.90 if self.lye_type == "90% KOH" else 1.0
+        calc_lye_type = "KOH" if "KOH" in self.lye_type else "NaOH"
         
-        # Apply superfat discount (reduce lye for superfat oils)
-        superfat_discount = 1 - (self.superfat_percent / 100)
-        lye_weight = pure_lye * superfat_discount
+        pure_lye = SoapMath.calculate_lye(self.oils, calc_lye_type, koh_purity)
         
-        # Adjust for 90% KOH (flakes are only 90% pure)
-        if self.lye_type == "90% KOH":
-            lye_weight = lye_weight / 0.90
-        
-        return round(lye_weight, 2)
+        # Apply superfat (lye discount)
+        discount = 1.0 - (self.superfat_percent / 100.0)
+        return round(pure_lye * discount, 2)
     
     def get_water_weight(self) -> float:
         """
@@ -78,26 +73,26 @@ class SoapCalculator:
         # Compute additive-based adjustments (do not mutate state)
         from ..data.additives import ADDITIVES
         additive_adjust = 0.0
-        for name, amt in self.additives.items():
-            info = ADDITIVES.get(name, {})
-            additive_adjust += info.get("water_percent_adjust", 0.0)
-
-        if self.water_calc_method == "ratio":
-            # Water-to-Lye Ratio method
-            water_weight = lye_weight * self.water_to_lye_ratio
-        elif self.water_calc_method == "percent":
-            # Water as % of Oils (apply additive adjustments)
-            effective_percent = max(0.0, self.water_percent + additive_adjust)
-            water_weight = total_oil * (effective_percent / 100)
-        elif self.water_calc_method == "concentration":
-            # Lye Concentration method: lye/(lye+water) = concentration/100
-            # Solved for water: water = lye * (100/concentration - 1)
-            if self.lye_concentration > 0 and self.lye_concentration < 100:
-                water_weight = lye_weight * ((100 / self.lye_concentration) - 1)
-            else:
-                water_weight = 0.0
-        else:
-            water_weight = lye_weight * self.water_to_lye_ratio
+        # Note: SoapCalc logic doesn't typically auto-adjust water for additives in the core math,
+        # but we can keep this feature if desired. For strict SoapCalc compliance, we rely on the standard methods.
+        
+        method_map = {
+            "ratio": "water_lye_ratio",
+            "percent": "percent_of_oils",
+            "concentration": "lye_concentration"
+        }
+        
+        method = method_map.get(self.water_calc_method, "percent_of_oils")
+        value = 0.0
+        
+        if method == "water_lye_ratio":
+            value = self.water_to_lye_ratio
+        elif method == "percent_of_oils":
+            value = self.water_percent
+        elif method == "lye_concentration":
+            value = self.lye_concentration
+            
+        water_weight = SoapMath.calculate_water(total_oil, lye_weight, method, value)
 
         # If any additives are marked as water replacements, treat their grams
         # as part of the water (subtract from the computed water total).
@@ -135,12 +130,6 @@ class SoapCalculator:
         
         total_weight = total_oil + lye + water
         
-        # Calculate INS (Iodine Number + Saponification Number)
-        # Used to estimate hardness and stability
-        iodine_value = self._calculate_iodine_value()
-        saponification_number = self._calculate_saponification_number()
-        ins_value = saponification_number - iodine_value
-
         # Fatty acid breakdown (weighted average)
         fa_keys = ["lauric", "myristic", "palmitic", "stearic", "oleic", "linoleic", "linolenic", "ricinoleic"]
         fa_totals = {k: 0.0 for k in fa_keys}
@@ -160,8 +149,8 @@ class SoapCalculator:
             for k in fa_keys:
                 fa_percentages[k] = 0.0
         
-        # Compute relative quality scores using weighted average of oil qualities
-        relative_qualities = self._calculate_recipe_qualities()
+        # Compute SoapCalc qualities
+        qualities = SoapMath.calculate_qualities(self.oils)
 
         return {
             "total_oil_weight": round(total_oil, 2),
@@ -170,43 +159,9 @@ class SoapCalculator:
             "total_batch_weight": round(total_weight, 2),
             "lye_percentage": round((lye / total_oil * 100) if total_oil > 0 else 0, 2),
             "water_percentage": round((water / total_oil * 100) if total_oil > 0 else 0, 2),
-            "iodine_value": round(iodine_value, 2),
-            "ins_value": round(ins_value, 2),
             "fa_breakdown": fa_percentages,
-            "relative_qualities": relative_qualities,
+            "relative_qualities": qualities,
         }
-    
-    def _calculate_iodine_value(self) -> float:
-        """Calculate total iodine value for the recipe"""
-        from ..data.oils import OILS
-        
-        total_oil = self.get_total_oil_weight()
-        if total_oil == 0:
-            return 0.0
-        
-        iodine_sum = 0.0
-        for oil_name, weight in self.oils.items():
-            if oil_name in OILS:
-                iv = OILS[oil_name].get("iodine_value", 0)
-                iodine_sum += (weight / total_oil) * iv
-        
-        return iodine_sum
-    
-    def _calculate_saponification_number(self) -> float:
-        """Calculate saponification number"""
-        from ..data.oils import OILS
-        
-        total_oil = self.get_total_oil_weight()
-        if total_oil == 0:
-            return 0.0
-        
-        sap_sum = 0.0
-        for oil_name, weight in self.oils.items():
-            sap_value = get_oil_sap(oil_name, self.lye_type)
-            sap_sum += weight * sap_value
-        
-        # SAP number in mg KOH per gram oil
-        return sap_sum / total_oil * 1000 if total_oil > 0 else 0.0
     
     def scale_recipe(self, new_batch_weight: float):
         """
@@ -299,52 +254,6 @@ class SoapCalculator:
             return weight * 453.592
         return weight
 
-    def _calculate_recipe_qualities(self) -> dict:
-        """Calculate recipe qualities as weighted average of oil qualities.
-        
-        Per SoapMaker 3: Recipe_Quality = Σ(Oil_Quality × Oil_Percentage)
-        
-        Each oil has pre-calculated quality scores (0-10 scale):
-        - Hardness: how long the bar lasts
-        - Fluffy Lather: ability to form large bubbles
-        - Stable Lather: long-lasting creamy lather
-        - Moisturizing: skin conditioning
-        """
-        from ..data.oils import OILS
-        
-        total_oil = self.get_total_oil_weight()
-        if total_oil == 0:
-            return {
-                "Hardness": 0.0,
-                "Fluffy Lather": 0.0,
-                "Stable Lather": 0.0,
-                "Moisturizing": 0.0,
-            }
-        
-        # Weighted average of oil qualities
-        hardness_sum = 0.0
-        fluffy_sum = 0.0
-        stable_sum = 0.0
-        moist_sum = 0.0
-        
-        for oil_name, weight in self.oils.items():
-            if oil_name in OILS:
-                info = OILS[oil_name]
-                percentage = weight / total_oil
-                
-                # Use quality values if available, default to 0
-                hardness_sum += info.get("quality_hardness", 0.0) * percentage
-                fluffy_sum += info.get("quality_fluffy", 0.0) * percentage
-                stable_sum += info.get("quality_stable", 0.0) * percentage
-                moist_sum += info.get("quality_moisturizing", 0.0) * percentage
-        
-        return {
-            "Hardness": round(hardness_sum, 1),
-            "Fluffy Lather": round(fluffy_sum, 1),
-            "Stable Lather": round(stable_sum, 1),
-            "Moisturizing": round(moist_sum, 1),
-        }
-    
     def _calculate_relative_qualities(self, fa_percentages: dict) -> dict:
         """Deprecated: Use _calculate_recipe_qualities instead.
         
@@ -352,7 +261,7 @@ class SoapCalculator:
         Calculate qualities from fatty acid percentages (less accurate).
         """
         # Just delegate to the oil-based quality calculation
-        return self._calculate_recipe_qualities()
+        return SoapMath.calculate_qualities(self.oils)
     
     def get_unit_abbreviation(self) -> str:
         """Get abbreviation for current unit system"""

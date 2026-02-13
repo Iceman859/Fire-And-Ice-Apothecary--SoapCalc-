@@ -51,7 +51,10 @@ class OilInputWidget(QWidget):
         names = get_all_oil_names()
         self.oil_combo.addItems(names)
         # simple completion
+        self.oil_combo.setCurrentIndex(-1) # Start blank
         completer = QCompleter(names)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.oil_combo.setCompleter(completer)
         layout.addWidget(self.oil_combo, 2)
         
@@ -60,7 +63,7 @@ class OilInputWidget(QWidget):
         layout.addWidget(self.weight_label)
         self.weight_spinbox = QDoubleSpinBox()
         self.weight_spinbox.setRange(0, 10000)
-        self.weight_spinbox.setValue(100)
+        self.weight_spinbox.setValue(0)
         layout.addWidget(self.weight_spinbox, 1)
         
         self.weight_unit_combo = QComboBox()
@@ -94,7 +97,7 @@ class OilInputWidget(QWidget):
             
             if weight_grams > 0:
                 self.calculator.add_oil(oil_name, weight_grams)
-            self.weight_spinbox.setValue(100)
+            self.weight_spinbox.setValue(0)
             self.oil_added.emit()
             
     def set_unit_system(self, unit_system: str):
@@ -128,7 +131,13 @@ class AdditiveInputWidget(QWidget):
         layout.addWidget(QLabel("Additive:"))
         self.add_combo = QComboBox()
         self.add_combo.setEditable(True)
-        self.add_combo.addItems(get_all_additive_names())
+        additive_names = get_all_additive_names()
+        self.add_combo.addItems(additive_names)
+        self.add_combo.setCurrentIndex(-1) # Start blank
+        completer = QCompleter(additive_names)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.add_combo.setCompleter(completer)
         layout.addWidget(self.add_combo, 2)
 
         # Amount type selector: percent of oils or explicit weight
@@ -145,7 +154,7 @@ class AdditiveInputWidget(QWidget):
         self.add_spin = QDoubleSpinBox()
         self.add_spin.setRange(0, 100)
         self.add_spin.setSingleStep(0.5)
-        self.add_spin.setValue(3.0)
+        self.add_spin.setValue(0)
         p_layout.addWidget(self.add_spin)
         layout.addWidget(self.percent_widget)
 
@@ -157,7 +166,7 @@ class AdditiveInputWidget(QWidget):
         self.add_weight_spin = QDoubleSpinBox()
         self.add_weight_spin.setRange(0, 10000)
         self.add_weight_spin.setSingleStep(1.0)
-        self.add_weight_spin.setValue(50.0)
+        self.add_weight_spin.setValue(0.0)
         w_layout.addWidget(self.add_weight_spin)
         self.add_unit_combo = QComboBox()
         self.add_unit_combo.addItems(["g", "oz", "lbs"])
@@ -190,8 +199,8 @@ class AdditiveInputWidget(QWidget):
         if amount_grams > 0:
             self.calculator.add_additive(name, amount_grams)
             # reset inputs
-            self.add_spin.setValue(3.0)
-            self.add_weight_spin.setValue(50.0)
+            self.add_spin.setValue(0)
+            self.add_weight_spin.setValue(0)
             self.additive_added.emit()
 
     def on_amount_type_changed(self, text: str):
@@ -212,9 +221,10 @@ class AdditiveInputWidget(QWidget):
 class CalculationResultsWidget(QWidget):
     """Widget for displaying calculation results"""
     
-    def __init__(self, calculator: SoapCalculator = None):
+    def __init__(self, calculator: SoapCalculator = None, cost_manager = None):
         super().__init__()
         self.calculator = calculator
+        self.cost_manager = cost_manager
         self.setup_ui()
     
     def setup_ui(self):
@@ -226,7 +236,7 @@ class CalculationResultsWidget(QWidget):
         w_layout = QGridLayout()
         
         self.weight_labels = {}
-        weight_keys = ["Total Oil Weight", "Water Weight", "Lye Weight", "Total Batch Weight"]
+        weight_keys = ["Total Oil Weight", "Water Weight", "Lye Weight", "Total Batch Weight", "Total Batch Cost"]
         
         for i, key in enumerate(weight_keys):
             w_layout.addWidget(QLabel(f"{key}:"), i, 0)
@@ -239,17 +249,34 @@ class CalculationResultsWidget(QWidget):
         layout.addWidget(self.weights_group)
         
         # Predicted Qualities
-        self.qualities_group = QGroupBox("Predicted Qualities")
+        self.qualities_group = QGroupBox("Soap Bar Quality")
         q_layout = QGridLayout()
         
-        self.quality_labels_display = {}
-        quality_keys = ["Hardness", "Conditioning", "Bubbly", "Creamy", "Iodine", "INS"]
+        # Headers
+        q_layout.addWidget(QLabel("<b>Quality</b>"), 0, 0)
+        q_layout.addWidget(QLabel("<b>Range</b>"), 0, 1)
+        q_layout.addWidget(QLabel("<b>Your Recipe</b>"), 0, 2)
         
-        for i, key in enumerate(quality_keys):
-            q_layout.addWidget(QLabel(f"{key}:"), i, 0)
+        self.quality_labels_display = {}
+        # SoapCalc Ranges
+        quality_data = [
+            ("Hardness", "29 - 54"),
+            ("Cleansing", "12 - 22"),
+            ("Conditioning", "44 - 69"),
+            ("Bubbly", "14 - 46"),
+            ("Creamy", "16 - 48"),
+            ("Iodine", "41 - 70"),
+            ("INS", "136 - 165")
+        ]
+        
+        for i, (key, range_val) in enumerate(quality_data):
+            row = i + 1
+            q_layout.addWidget(QLabel(key), row, 0)
+            q_layout.addWidget(QLabel(range_val), row, 1)
+            
             val_lbl = QLabel("0.0")
             val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
-            q_layout.addWidget(val_lbl, i, 1)
+            q_layout.addWidget(val_lbl, row, 2)
             self.quality_labels_display[key] = val_lbl
             
         self.qualities_group.setLayout(q_layout)
@@ -276,33 +303,52 @@ class CalculationResultsWidget(QWidget):
                 return f"{grams / 453.592:.2f}"
             return f"{grams:.2f}"
         
+        # Calculate total cost
+        total_cost = 0.0
+        if self.cost_manager and self.calculator:
+            for name, weight in self.calculator.oils.items():
+                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+            for name, weight in self.calculator.additives.items():
+                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+            
+            # Add Lye Cost
+            lye_weight = properties.get('lye_weight', 0.0)
+            lye_type = self.calculator.lye_type
+            total_cost += lye_weight * self.cost_manager.get_cost_per_gram(lye_type)
+        
         # Batch Weights
         weights_map = {
             "Total Oil Weight": properties['total_oil_weight'],
             "Water Weight": properties['water_weight'],
             "Lye Weight": properties['lye_weight'],
-            "Total Batch Weight": properties['total_batch_weight']
+            "Total Batch Weight": properties['total_batch_weight'],
+            "Total Batch Cost": total_cost
         }
         
-        for key, grams in weights_map.items():
+        for key, val in weights_map.items():
             if key in self.weight_labels:
-                self.weight_labels[key].setText(f"{convert_weight(grams)} {unit_abbr}")
+                if key == "Total Batch Cost":
+                    self.weight_labels[key].setText(f"${float(val):.2f}")
+                else:
+                    self.weight_labels[key].setText(f"{convert_weight(val)} {unit_abbr}")
             
         # Soap Qualities
         qualities = properties.get('relative_qualities', {})
         
         quality_map = {
-            "Hardness": qualities.get('Hardness', 0),
-            "Conditioning": qualities.get('Moisturizing', 0),
-            "Bubbly": qualities.get('Fluffy Lather', 0),
-            "Creamy": qualities.get('Stable Lather', 0),
-            "Iodine": properties.get('iodine_value', 0),
-            "INS": properties.get('ins_value', 0)
+            "Hardness": qualities.get('hardness', 0),
+            "Cleansing": qualities.get('cleansing', 0),
+            "Conditioning": qualities.get('conditioning', 0),
+            "Bubbly": qualities.get('bubbly', 0),
+            "Creamy": qualities.get('creamy', 0),
+            "Iodine": qualities.get('iodine', 0),
+            "INS": qualities.get('ins', 0)
         }
         
         for key, val in quality_map.items():
             if key in self.quality_labels_display:
-                self.quality_labels_display[key].setText(f"{float(val):.1f}")
+                # SoapCalc uses integers for qualities
+                self.quality_labels_display[key].setText(f"{int(round(float(val)))}")
 
 
 class FABreakdownWidget(QWidget):
@@ -714,3 +760,91 @@ class RecipeReportWidget(QWidget):
         dialog = QPrintDialog(printer, self)
         if dialog.exec() == QPrintDialog.DialogCode.Accepted:
             self.viewer.print(printer)
+
+
+class InventoryCostWidget(QWidget):
+    """Widget for managing ingredient costs"""
+    
+    def __init__(self, cost_manager):
+        super().__init__()
+        self.cost_manager = cost_manager
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # Input Form Group
+        form_group = QGroupBox("Update Ingredient Cost")
+        form_layout = QGridLayout()
+        
+        form_layout.addWidget(QLabel("Ingredient:"), 0, 0)
+        self.ingredient_combo = QComboBox()
+        self.ingredient_combo.setEditable(True)
+        # Populate with oils and additives
+        items = sorted(get_all_oil_names() + get_all_additive_names() + ["NaOH", "KOH", "90% KOH"])
+        self.ingredient_combo.addItems(items)
+        completer = QCompleter(items)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.ingredient_combo.setCompleter(completer)
+        form_layout.addWidget(self.ingredient_combo, 0, 1)
+        
+        form_layout.addWidget(QLabel("Price Paid ($):"), 1, 0)
+        self.price_spin = QDoubleSpinBox()
+        self.price_spin.setRange(0, 10000)
+        self.price_spin.setDecimals(2)
+        form_layout.addWidget(self.price_spin, 1, 1)
+        
+        form_layout.addWidget(QLabel("Quantity:"), 2, 0)
+        self.qty_spin = QDoubleSpinBox()
+        self.qty_spin.setRange(0, 10000)
+        self.qty_spin.setDecimals(2)
+        form_layout.addWidget(self.qty_spin, 2, 1)
+        
+        form_layout.addWidget(QLabel("Unit:"), 3, 0)
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(["grams", "oz", "lbs", "kg", "liters", "gallons", "fl oz"])
+        form_layout.addWidget(self.unit_combo, 3, 1)
+        
+        save_btn = QPushButton("Save Cost")
+        save_btn.clicked.connect(self.save_cost)
+        form_layout.addWidget(save_btn, 4, 0, 1, 2)
+        
+        form_group.setLayout(form_layout)
+        layout.addWidget(form_group)
+        
+        # Table
+        self.cost_table = QTableWidget()
+        self.cost_table.setColumnCount(4)
+        self.cost_table.setHorizontalHeaderLabels(["Ingredient", "Price", "Quantity", "Cost/g"])
+        layout.addWidget(self.cost_table)
+        
+        self.refresh_table()
+        
+        self.setLayout(layout)
+        
+    def save_cost(self):
+        name = self.ingredient_combo.currentText()
+        price = self.price_spin.value()
+        qty = self.qty_spin.value()
+        unit = self.unit_combo.currentText()
+        
+        if name and qty > 0:
+            self.cost_manager.set_cost(name, price, qty, unit)
+            self.refresh_table()
+            
+    def refresh_table(self):
+        self.cost_table.setRowCount(0)
+        costs = self.cost_manager.costs
+        self.cost_table.setRowCount(len(costs))
+        
+        for i, (name, data) in enumerate(sorted(costs.items())):
+            price = data.get('price', 0.0)
+            qty = data.get('quantity', 0.0)
+            unit = data.get('unit', '')
+            cost_per_g = self.cost_manager.get_cost_per_gram(name)
+            
+            self.cost_table.setItem(i, 0, QTableWidgetItem(name))
+            self.cost_table.setItem(i, 1, QTableWidgetItem(f"${price:.2f}"))
+            self.cost_table.setItem(i, 2, QTableWidgetItem(f"{qty} {unit}"))
+            self.cost_table.setItem(i, 3, QTableWidgetItem(f"${cost_per_g:.4f}"))

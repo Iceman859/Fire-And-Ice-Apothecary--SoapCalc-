@@ -1,0 +1,37 @@
+{
+    "Olive Oil": {
+        "price": 22.98,
+        "quantity": 101.0,
+        "unit": "fl oz"
+    },
+    "Coconut Oil": {
+        "price": 24.98,
+        "quantity": 128.0,
+        "unit": "fl oz"
+    },
+    "Shea Butter": {
+        "price": 19.99,
+        "quantity": 2.0,
+        "unit": "lbs"
+    },
+    "Castor Oil": {
+        "price": 15.29,
+        "quantity": 28.0,
+        "unit": "fl oz"
+    },
+    "Goat Milk": {
+        "price": 19.96,
+        "quantity": 16.0,
+        "unit": "oz"
+    },
+    "NaOH": {
+        "price": 15.99,
+        "quantity": 2.0,
+        "unit": "lbs"
+    },
+    "Kaolin Clay": {
+        "price": 8.99,
+        "quantity": 3.5,
+        "unit": "oz"
+    }
+}
