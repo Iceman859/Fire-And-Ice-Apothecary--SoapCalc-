@@ -2,6 +2,8 @@
 Oil database and calculation logic derived from SoapCalc.
 Contains exact SAP values, Fatty Acid profiles, and Quality calculation algorithms.
 """
+import json
+import os
 
 # Helper to calculate qualities based on SoapCalc logic
 def _calc_qualities(fa, override=None):
@@ -773,6 +775,61 @@ OILS = {
     }
 }
 
+CUSTOM_OILS_FILE = "custom_oils.json"
+
+def load_custom_oils():
+    """Load custom oils from JSON file."""
+    if os.path.exists(CUSTOM_OILS_FILE):
+        try:
+            with open(CUSTOM_OILS_FILE, 'r') as f:
+                custom_oils = json.load(f)
+                OILS.update(custom_oils)
+        except Exception as e:
+            print(f"Error loading custom oils: {e}")
+
+def save_custom_oil(name: str, data: dict):
+    """Save a custom oil to JSON and update memory."""
+    # Update in-memory
+    OILS[name] = data
+    
+    # Load existing custom oils to append/update
+    custom_oils = {}
+    if os.path.exists(CUSTOM_OILS_FILE):
+        try:
+            with open(CUSTOM_OILS_FILE, 'r') as f:
+                custom_oils = json.load(f)
+        except Exception:
+            pass
+    
+    custom_oils[name] = data
+    
+    try:
+        with open(CUSTOM_OILS_FILE, 'w') as f:
+            json.dump(custom_oils, f, indent=4)
+    except Exception as e:
+        print(f"Error saving custom oil: {e}")
+
+def delete_custom_oil(name: str):
+    """Delete a custom oil."""
+    if name in OILS:
+        del OILS[name]
+        
+    custom_oils = {}
+    if os.path.exists(CUSTOM_OILS_FILE):
+        try:
+            with open(CUSTOM_OILS_FILE, 'r') as f:
+                custom_oils = json.load(f)
+        except Exception:
+            pass
+            
+    if name in custom_oils:
+        del custom_oils[name]
+        try:
+            with open(CUSTOM_OILS_FILE, 'w') as f:
+                json.dump(custom_oils, f, indent=4)
+        except Exception as e:
+            print(f"Error deleting custom oil: {e}")
+
 def get_oil_sap(oil_name: str, lye_type: str = "NaOH") -> float:
     """Get SAP value for an oil."""
     if oil_name not in OILS:
@@ -866,3 +923,6 @@ class SoapMath:
             final_qualities["ins"] += oil_data.get("ins", 0) * ratio
             
         return final_qualities
+
+# Load custom oils on module import
+load_custom_oils()

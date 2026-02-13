@@ -3,7 +3,8 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QSpinBox, QDoubleSpinBox, QComboBox,
-    QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox, QSplitter
+    QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox, QSplitter,
+    QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSettings
 from PyQt6.QtGui import QIcon, QFont
@@ -15,7 +16,7 @@ from src.data import get_all_oil_names
 from .widgets import (
     OilInputWidget, CalculationResultsWidget, SettingsWidget,
     RecipeManagementWidget, AdditiveInputWidget, RecipeParametersWidget,
-    RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget
+    RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget, FragranceWidget
 )
 from .widgets import FABreakdownWidget
 
@@ -214,66 +215,80 @@ class MainWindow(QMainWindow):
         tab = QWidget()
         layout = QHBoxLayout()
         
-        # Left side: Oil inputs
-        left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(5, 5, 5, 5)
+        # --- Column 1: Parameters & Fragrance (Left) ---
+        col1_content = QWidget()
+        col1_layout = QVBoxLayout(col1_content)
+        col1_layout.setContentsMargins(5, 5, 5, 5)
+        
+        col1_layout.addWidget(QLabel("Recipe Parameters:"))
+        self.recipe_settings = RecipeParametersWidget(self.calculator)
+        col1_layout.addWidget(self.recipe_settings)
+        
+        col1_layout.addWidget(QLabel("Fragrance:"))
+        self.fragrance_widget = FragranceWidget(self.calculator)
+        col1_layout.addWidget(self.fragrance_widget)
+        
+        col1_layout.addStretch()
+        
+        col1_scroll = QScrollArea()
+        col1_scroll.setWidgetResizable(True)
+        col1_scroll.setWidget(col1_content)
+        col1_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        # --- Column 2: Oils & Additives (Middle) ---
+        col2_widget = QWidget()
+        col2_layout = QVBoxLayout(col2_widget)
+        col2_layout.setContentsMargins(5, 5, 5, 5)
         
         # Oil Input Area
         self.oil_input_widget = OilInputWidget(self.calculator)
-        left_layout.addWidget(self.oil_input_widget)
+        col2_layout.addWidget(self.oil_input_widget)
         
         # Table for oils in recipe
         self.oils_table = QTableWidget()
         self.oils_table.setColumnCount(4)
         self.update_oils_table_headers()
-        self.oils_table.setColumnWidth(0, 200)
-        self.oils_table.setColumnWidth(1, 90)
-        self.oils_table.setColumnWidth(2, 80)
-        self.oils_table.setColumnWidth(3, 80)
-        left_layout.addWidget(self.oils_table)
+        self.oils_table.setColumnWidth(0, 180)
+        self.oils_table.setColumnWidth(1, 80)
+        self.oils_table.setColumnWidth(2, 70)
+        self.oils_table.setColumnWidth(3, 70)
+        col2_layout.addWidget(self.oils_table)
 
         # enable inline edits and removal for oils
         self.oils_table.cellChanged.connect(self.on_oil_cell_changed)
         remove_oil_btn = QPushButton("Remove Selected Oil")
         remove_oil_btn.clicked.connect(self.remove_selected_oil)
-        left_layout.addWidget(remove_oil_btn)
+        col2_layout.addWidget(remove_oil_btn)
 
         # Additives Input Area
         self.additive_widget = AdditiveInputWidget(self.calculator)
-        left_layout.addWidget(self.additive_widget)
+        col2_layout.addWidget(self.additive_widget)
         
         # Additives table (editable) - shown below oil input
         self.additives_table = QTableWidget()
         self.additives_table.setColumnCount(3)
         unit_abbr = self.calculator.get_unit_abbreviation()
         self.additives_table.setHorizontalHeaderLabels(["Additive", f"Amount ({unit_abbr})", "Water Replacement"])
-        self.additives_table.setColumnWidth(0, 220)
-        self.additives_table.setColumnWidth(1, 100)
-        self.additives_table.setColumnWidth(2, 110)
-        left_layout.addWidget(self.additives_table)
+        self.additives_table.setColumnWidth(0, 180)
+        self.additives_table.setColumnWidth(1, 90)
+        self.additives_table.setColumnWidth(2, 100)
+        col2_layout.addWidget(self.additives_table)
         self.additives_table.cellChanged.connect(self.on_additive_cell_changed)
         remove_add_btn = QPushButton("Remove Selected Additive")
         remove_add_btn.clicked.connect(self.remove_selected_additive)
-        left_layout.addWidget(remove_add_btn)
+        col2_layout.addWidget(remove_add_btn)
 
-        left_widget = QWidget()
-        left_widget.setLayout(left_layout)
+        # --- Column 3: Results & Operations (Right) ---
+        col3_content = QWidget()
+        col3_layout = QVBoxLayout(col3_content)
+        col3_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Right side: Results and scaling
-        right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Recipe Parameters (Lye, Water, Superfat)
-        right_layout.addWidget(QLabel("Recipe Parameters:"))
-        self.recipe_settings = RecipeParametersWidget(self.calculator)
-        right_layout.addWidget(self.recipe_settings)
-        
-        right_layout.addWidget(QLabel("Calculation Results:"))
+        col3_layout.addWidget(QLabel("Calculation Results:"))
         self.results_widget = CalculationResultsWidget(self.calculator, self.cost_manager)
-        right_layout.addWidget(self.results_widget)
+        col3_layout.addWidget(self.results_widget)
         
         # Scaling controls
-        right_layout.addWidget(QLabel("Scale Recipe:"))
+        col3_layout.addWidget(QLabel("Scale Recipe:"))
         scale_layout = QHBoxLayout()
         self.scale_label = QLabel("Total Oil Weight (g):")
         scale_layout.addWidget(self.scale_label)
@@ -284,36 +299,40 @@ class MainWindow(QMainWindow):
         scale_btn = QPushButton("Scale Recipe")
         scale_btn.clicked.connect(self.scale_recipe)
         scale_layout.addWidget(scale_btn)
-        right_layout.addLayout(scale_layout)
+        col3_layout.addLayout(scale_layout)
         
         # Connect percentage callback to use the scale spinbox as target weight
         self.oil_input_widget.target_weight_callback = self.get_target_batch_weight
         
         # Recipe management buttons
-        right_layout.addWidget(QLabel("Recipe Operations:"))
+        col3_layout.addWidget(QLabel("Recipe Operations:"))
         button_layout = QHBoxLayout()
-        new_btn = QPushButton("New Recipe")
+        new_btn = QPushButton("New")
         new_btn.clicked.connect(self.new_recipe)
         button_layout.addWidget(new_btn)
-        save_btn = QPushButton("Save Recipe")
+        save_btn = QPushButton("Save")
         save_btn.clicked.connect(self.save_recipe)
         button_layout.addWidget(save_btn)
-        load_btn = QPushButton("Load Recipe")
+        load_btn = QPushButton("Load")
         load_btn.clicked.connect(self.load_recipe)
         button_layout.addWidget(load_btn)
-        right_layout.addLayout(button_layout)
+        col3_layout.addLayout(button_layout)
         
-        right_layout.addStretch()
+        col3_layout.addStretch()
         
-        right_widget = QWidget()
-        right_widget.setLayout(right_layout)
+        col3_scroll = QScrollArea()
+        col3_scroll.setWidgetResizable(True)
+        col3_scroll.setWidget(col3_content)
+        col3_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         
         # Splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
+        splitter.addWidget(col1_scroll)
+        splitter.addWidget(col2_widget)
+        splitter.addWidget(col3_scroll)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(2, 1)
         
         layout.addWidget(splitter)
         tab.setLayout(layout)
@@ -399,6 +418,10 @@ class MainWindow(QMainWindow):
         # ensure tables update when settings change (units etc.)
         self.settings_widget.settings_changed.connect(self.update_oils_table)
         self.settings_widget.settings_changed.connect(self.update_additives_table)
+
+        # Fragrance connections
+        self.fragrance_widget.fragrance_added.connect(self.update_additives_table)
+        self.fragrance_widget.fragrance_added.connect(self.update_results)
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
@@ -512,6 +535,10 @@ class MainWindow(QMainWindow):
             pass
         self.update_oils_table()
         self.update_additives_table()
+        
+        # Update fragrance calc
+        if hasattr(self, 'fragrance_widget'):
+            self.fragrance_widget.update_calculation()
     
     def get_target_batch_weight(self):
         """Get target batch weight in grams for percentage calculations"""

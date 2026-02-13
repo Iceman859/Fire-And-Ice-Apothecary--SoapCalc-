@@ -218,6 +218,81 @@ class AdditiveInputWidget(QWidget):
         self.add_unit_combo.setCurrentText(unit_map.get(unit_system, "g"))
 
 
+class FragranceWidget(QWidget):
+    """Widget to calculate fragrance amount based on usage rate"""
+    
+    fragrance_added = pyqtSignal()
+
+    def __init__(self, calculator: SoapCalculator):
+        super().__init__()
+        self.calculator = calculator
+        self.setup_ui()
+
+    def setup_ui(self):
+        group = QGroupBox("Fragrance / Essential Oil Calculator")
+        layout = QGridLayout()
+        
+        layout.addWidget(QLabel("Scent Name:"), 0, 0)
+        self.name_combo = QComboBox()
+        self.name_combo.setEditable(True)
+        self.name_combo.addItems(["Lavender EO", "Peppermint EO", "Tea Tree EO", "Lemon EO", "Orange EO", "Fragrance Oil"])
+        self.name_combo.setCurrentIndex(-1)
+        self.name_combo.setPlaceholderText("e.g. Lavender EO")
+        layout.addWidget(self.name_combo, 0, 1)
+        
+        layout.addWidget(QLabel("Usage Rate:"), 1, 0)
+        self.rate_spin = QDoubleSpinBox()
+        self.rate_spin.setRange(0, 15) 
+        self.rate_spin.setSingleStep(0.1)
+        self.rate_spin.setValue(3.0) 
+        self.rate_spin.setSuffix("%")
+        self.rate_spin.setToolTip("Typical rates: EO (0.5-3%), FO (3-6%)")
+        self.rate_spin.valueChanged.connect(self.update_calculation)
+        layout.addWidget(self.rate_spin, 1, 1)
+        
+        layout.addWidget(QLabel("Required Amount:"), 2, 0)
+        self.amount_lbl = QLabel("0.00 g")
+        self.amount_lbl.setStyleSheet("font-weight: bold; color: #4fc3f7;")
+        layout.addWidget(self.amount_lbl, 2, 1)
+        
+        add_btn = QPushButton("Add to Additives")
+        add_btn.clicked.connect(self.add_fragrance)
+        layout.addWidget(add_btn, 3, 0, 1, 2)
+        
+        group.setLayout(layout)
+        
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0,0,0,0)
+        main_layout.addWidget(group)
+        self.setLayout(main_layout)
+        
+    def update_calculation(self):
+        """Recalculate amount based on current total oils"""
+        rate = self.rate_spin.value()
+        total_oil = self.calculator.get_total_oil_weight()
+        amount_grams = total_oil * (rate / 100.0)
+        
+        unit = self.calculator.unit_system
+        display_amount = self.calculator.convert_weight(amount_grams, unit)
+        abbr = self.calculator.get_unit_abbreviation()
+        
+        self.amount_lbl.setText(f"{display_amount:.2f} {abbr}")
+
+    def add_fragrance(self):
+        rate = self.rate_spin.value()
+        total_oil = self.calculator.get_total_oil_weight()
+        amount_grams = total_oil * (rate / 100.0)
+        
+        if amount_grams > 0:
+            name = self.name_combo.currentText()
+            if not name:
+                name = "Fragrance"
+            
+            # Add to calculator additives
+            self.calculator.add_additive(name, amount_grams)
+            self.fragrance_added.emit()
+
+
 class CalculationResultsWidget(QWidget):
     """Widget for displaying calculation results"""
     
@@ -557,6 +632,11 @@ class SettingsWidget(QWidget):
         theme_layout.addWidget(self.theme_combo)
         layout.addLayout(theme_layout)
         
+        # Custom Ingredients Button
+        custom_btn = QPushButton("Manage Custom Ingredients")
+        custom_btn.clicked.connect(self.open_ingredient_editor)
+        layout.addWidget(custom_btn)
+        
         layout.addStretch()
         self.setLayout(layout)
     
@@ -569,6 +649,11 @@ class SettingsWidget(QWidget):
     def on_theme_changed(self, theme_text: str):
         """Handle theme accent change"""
         self.settings_changed.emit()
+        
+    def open_ingredient_editor(self):
+        from src.ui.ingredient_editor import IngredientEditorDialog
+        dialog = IngredientEditorDialog(self)
+        dialog.exec()
 
 
 class RecipeManagementWidget(QWidget):

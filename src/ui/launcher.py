@@ -48,10 +48,6 @@ class LauncherWindow(QWidget):
         self.btn_soap.clicked.connect(self.launch_soap)
         layout.addWidget(self.btn_soap)
         
-        self.btn_gummy = self.create_button("Gummies", "Gelatin, Pectin, and Flavoring")
-        self.btn_gummy.clicked.connect(self.launch_gummy)
-        layout.addWidget(self.btn_gummy)
-        
         self.btn_infusion = self.create_button("Infusions", "Coming Soon")
         self.btn_infusion.setEnabled(False)
         layout.addWidget(self.btn_infusion)
@@ -119,12 +115,6 @@ class LauncherWindow(QWidget):
         from src.ui.main_window import MainWindow
         self.soap_window = MainWindow()
         self.soap_window.show()
-        self.close()
-
-    def launch_gummy(self):
-        from src.ui.gummy_window import GummyMainWindow
-        self.gummy_window = GummyMainWindow()
-        self.gummy_window.show()
         self.close()
 
     def open_settings(self):
