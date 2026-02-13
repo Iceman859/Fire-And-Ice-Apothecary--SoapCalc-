@@ -16,7 +16,8 @@ from src.data import get_all_oil_names
 from .widgets import (
     OilInputWidget, CalculationResultsWidget, SettingsWidget,
     AdditiveInputWidget, RecipeParametersWidget,
-    RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget, FragranceWidget
+    RecipeNotesWidget, RecipeReportWidget, InventoryCostWidget, FragranceWidget,
+    ProfitAnalysisWidget
 )
 from .widgets import FABreakdownWidget
 
@@ -191,6 +192,10 @@ class MainWindow(QMainWindow):
         self.inventory_tab = self.create_inventory_tab()
         tabs.addTab(self.inventory_tab, "Inventory/Cost")
         
+        # Business/Profit Tab
+        self.profit_tab = self.create_profit_tab()
+        tabs.addTab(self.profit_tab, "Business / Profit")
+        
         # Settings Tab
         settings_tab = self.create_settings_tab()
         tabs.addTab(settings_tab, "Settings")
@@ -221,7 +226,7 @@ class MainWindow(QMainWindow):
         col1_layout.addWidget(self.recipe_settings)
         
         col1_layout.addWidget(QLabel("Fragrance:"))
-        self.fragrance_widget = FragranceWidget(self.calculator)
+        self.fragrance_widget = FragranceWidget(self.calculator, self.cost_manager)
         col1_layout.addWidget(self.fragrance_widget)
         
         col1_layout.addStretch()
@@ -267,12 +272,13 @@ class MainWindow(QMainWindow):
         
         # Additives table (editable) - shown below oil input
         self.additives_table = QTableWidget()
-        self.additives_table.setColumnCount(3)
+        self.additives_table.setColumnCount(4)
         unit_abbr = self.calculator.get_unit_abbreviation()
-        self.additives_table.setHorizontalHeaderLabels(["Additive", f"Amount ({unit_abbr})", "Water Replacement"])
+        self.additives_table.setHorizontalHeaderLabels(["Additive", f"Amount ({unit_abbr})", "Water Replacement", "Cost"])
         self.additives_table.setColumnWidth(0, 180)
         self.additives_table.setColumnWidth(1, 90)
         self.additives_table.setColumnWidth(2, 100)
+        self.additives_table.setColumnWidth(3, 70)
         col2_layout.addWidget(self.additives_table)
         self.additives_table.cellChanged.connect(self.on_additive_cell_changed)
         remove_add_btn = QPushButton("Remove Selected Additive")
@@ -386,6 +392,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.inventory_widget)
         tab.setLayout(layout)
         return tab
+        
+    def create_profit_tab(self):
+        """Create the business profit analysis tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.profit_widget = ProfitAnalysisWidget()
+        layout.addWidget(self.profit_widget)
+        tab.setLayout(layout)
+        return tab
     
     def connect_signals(self):
         """Connect widget signals to slots"""
@@ -412,6 +427,10 @@ class MainWindow(QMainWindow):
         # Fragrance connections
         self.fragrance_widget.fragrance_added.connect(self.update_additives_table)
         self.fragrance_widget.fragrance_added.connect(self.update_results)
+        
+        # Inventory connections
+        self.inventory_widget.costs_changed.connect(self.update_results)
+        self.inventory_widget.costs_changed.connect(self.fragrance_widget.refresh_ingredients)
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
@@ -419,6 +438,10 @@ class MainWindow(QMainWindow):
         if self.tabs.widget(index) == self.print_tab:
             notes = self.notes_widget.get_notes()
             self.report_widget.refresh_report(self.current_recipe.name or "Current Recipe", notes)
+        # Refresh fragrance list when switching to recipe tab (in case inventory changed)
+        if index == 0: # Recipe Tab
+            if hasattr(self, 'fragrance_widget'):
+                self.fragrance_widget.refresh_ingredients()
 
     def get_theme_colors(self, name):
         """Get colors for theme name"""
@@ -453,20 +476,27 @@ class MainWindow(QMainWindow):
         self._suppress_additives_table_signals = True
         # update header to reflect current unit
         unit_abbr = self.calculator.get_unit_abbreviation()
-        self.additives_table.setHorizontalHeaderLabels(["Additive", f"Amount ({unit_abbr})", "Water Replacement"])
+        self.additives_table.setHorizontalHeaderLabels(["Additive", f"Amount ({unit_abbr})", "Water Replacement", "Cost"])
         self.additives_table.setRowCount(rows)
         from src.data.additives import get_additive_info
         for row, (name, grams) in enumerate(sorted(additives.items())):
             # display amount in current unit
             display_amount = self.calculator.convert_weight(grams, self.calculator.unit_system)
+            
+            # Calculate cost
+            cost_per_g = self.cost_manager.get_cost_per_gram(name)
+            cost = grams * cost_per_g
+            
             name_item = QTableWidgetItem(name)
             amt_item = QTableWidgetItem(f"{display_amount:.2f}")
             info = get_additive_info(name)
             is_repl = info.get('is_water_replacement', False)
             repl_item = QTableWidgetItem("Yes" if is_repl else "No")
+            cost_item = QTableWidgetItem(f"${cost:.2f}")
             self.additives_table.setItem(row, 0, name_item)
             self.additives_table.setItem(row, 1, amt_item)
             self.additives_table.setItem(row, 2, repl_item)
+            self.additives_table.setItem(row, 3, cost_item)
         self._suppress_additives_table_signals = False
     
     def update_oils_table(self):
@@ -529,6 +559,28 @@ class MainWindow(QMainWindow):
         # Update fragrance calc
         if hasattr(self, 'fragrance_widget'):
             self.fragrance_widget.update_calculation()
+            
+        # Update Profit Tab
+        if hasattr(self, 'profit_widget'):
+            # Extract total cost and bar count from results widget logic
+            # We can get total cost from the calculator + cost manager directly
+            total_cost = 0.0
+            for name, weight in self.calculator.oils.items():
+                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+            for name, weight in self.calculator.additives.items():
+                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+            total_cost += properties.get('lye_weight', 0.0) * self.cost_manager.get_cost_per_gram(self.calculator.lye_type)
+            
+            # Estimate bars based on current bar size setting in results widget
+            bar_size = self.results_widget.bar_size_spin.value()
+            additive_weight = sum(self.calculator.additives.values())
+            total_weight = properties['total_batch_weight'] + additive_weight
+            
+            # Convert total weight to display units to match bar size unit
+            display_weight = self.calculator.convert_weight(total_weight, self.calculator.unit_system)
+            
+            bar_count = display_weight / bar_size if bar_size > 0 else 0
+            self.profit_widget.update_data(total_cost, bar_count)
     
     def get_target_batch_weight(self):
         """Get target batch weight in grams for percentage calculations"""
@@ -539,10 +591,21 @@ class MainWindow(QMainWindow):
         """Scale recipe to new weight"""
         new_weight = self.scale_spinbox.value()
         unit_abbr = self.calculator.get_unit_abbreviation()
-        if new_weight > 0:
+        current_total_oil = self.calculator.get_total_oil_weight()
+        
+        if new_weight > 0 and current_total_oil > 0:
             # Convert from display unit to grams
             weight_grams = self.calculator.convert_to_grams(new_weight, self.calculator.unit_system)
+            
+            # Calculate ratio for additives before scaling oils
+            ratio = weight_grams / current_total_oil
+            
             self.calculator.scale_recipe(weight_grams)
+            
+            # Scale Additives
+            for name, amount in self.calculator.additives.items():
+                self.calculator.additives[name] = amount * ratio
+                
             self.update_results()
             self.statusBar().showMessage(f"Recipe scaled to {new_weight}{unit_abbr}")
     

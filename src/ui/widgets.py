@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox,
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QSpinBox, QCompleter, QGroupBox,
-    QGridLayout, QTextEdit, QTextBrowser
+    QGridLayout, QTextEdit, QTextBrowser, QFormLayout, QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from src.models import SoapCalculator, RecipeManager
@@ -249,9 +249,10 @@ class FragranceWidget(QWidget):
     
     fragrance_added = pyqtSignal()
 
-    def __init__(self, calculator: SoapCalculator):
+    def __init__(self, calculator: SoapCalculator, cost_manager=None):
         super().__init__()
         self.calculator = calculator
+        self.cost_manager = cost_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -261,9 +262,17 @@ class FragranceWidget(QWidget):
         layout.addWidget(QLabel("Scent Name:"), 0, 0)
         self.name_combo = QComboBox()
         self.name_combo.setEditable(True)
-        self.name_combo.addItems(["Lavender EO", "Peppermint EO", "Tea Tree EO", "Lemon EO", "Orange EO", "Fragrance Oil"])
-        self.name_combo.setCurrentIndex(5)
+        
+        # Populate with inventory items if available, otherwise defaults
+        items = ["Lavender EO", "Peppermint EO", "Tea Tree EO", "Lemon EO", "Orange EO", "Fragrance Oil"]
+        if self.cost_manager:
+            # Add items from inventory that aren't already in the list
+            inventory_items = sorted(self.cost_manager.costs.keys())
+            items = sorted(list(set(items + inventory_items)))
+            
+        self.name_combo.addItems(items)
         self.name_combo.setPlaceholderText("e.g. Lavender EO")
+        self.name_combo.setCurrentIndex(-1)
         layout.addWidget(self.name_combo, 0, 1)
         
         layout.addWidget(QLabel("Usage Rate:"), 1, 0)
@@ -374,6 +383,17 @@ class FragranceWidget(QWidget):
             # Add to calculator additives
             self.calculator.add_additive(name, amount_grams)
             self.fragrance_added.emit()
+            
+    def refresh_ingredients(self):
+        """Refresh list from cost manager"""
+        if self.cost_manager:
+            current = self.name_combo.currentText()
+            self.name_combo.clear()
+            items = ["Lavender EO", "Peppermint EO", "Tea Tree EO", "Lemon EO", "Orange EO", "Fragrance Oil"]
+            inventory_items = sorted(self.cost_manager.costs.keys())
+            items = sorted(list(set(items + inventory_items)))
+            self.name_combo.addItems(items)
+            self.name_combo.setCurrentText(current)
 
 
 class CalculationResultsWidget(QWidget):
@@ -433,6 +453,11 @@ class CalculationResultsWidget(QWidget):
         
         self.yield_label = QLabel("0.0 bars")
         y_layout.addWidget(self.yield_label, 0, 2)
+        
+        y_layout.addWidget(QLabel("Cost/Bar:"), 1, 0)
+        self.cost_per_bar_label = QLabel("$0.00")
+        y_layout.addWidget(self.cost_per_bar_label, 1, 1)
+        
         self.yield_group.setLayout(y_layout)
         layout.addWidget(self.yield_group)
 
@@ -545,6 +570,12 @@ class CalculationResultsWidget(QWidget):
             bar_count = total_display_weight / bar_size
             self.yield_label.setText(f"Est: {bar_count:.1f} bars")
             self.bar_size_spin.setSuffix(f" {unit_abbr}")
+            
+            if bar_count > 0:
+                cost_per_bar = total_cost / bar_count
+                self.cost_per_bar_label.setText(f"${cost_per_bar:.2f}")
+            else:
+                self.cost_per_bar_label.setText("$0.00")
 
         # Soap Qualities
         qualities = properties.get('relative_qualities', {})
@@ -905,6 +936,15 @@ class RecipeReportWidget(QWidget):
         props = self.calculator.get_batch_properties()
         unit = self.calculator.unit_system
         unit_abbr = self.calculator.get_unit_abbreviation()
+        qualities = props.get('relative_qualities', {})
+        fa_profile = props.get('fa_breakdown', {})
+        
+        # Define ranges for qualities
+        quality_ranges = [
+            ("Hardness", 29, 54), ("Cleansing", 12, 22), ("Conditioning", 44, 69),
+            ("Bubbly", 14, 46), ("Creamy", 16, 48), ("Iodine", 41, 70), ("INS", 136, 165)
+        ]
+        
         
         # Helper to format weight
         def fmt(w):
@@ -914,55 +954,140 @@ class RecipeReportWidget(QWidget):
         <html>
         <head>
             <style>
-                body {{ font-family: sans-serif; color: #000; background-color: #fff; }}
-                h1 {{ color: #2c3e50; border-bottom: 2px solid #2c3e50; }}
-                h2 {{ color: #34495e; margin-top: 20px; border-bottom: 1px solid #ddd; }}
-                table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; }}
-                th {{ text-align: left; background-color: #f2f2f2; padding: 8px; border-bottom: 1px solid #ddd; }}
-                td {{ padding: 8px; border-bottom: 1px solid #eee; }}
-                .highlight {{ font-weight: bold; color: #2980b9; }}
-                .notes {{ background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; }}
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; background-color: #fff; font-size: 13px; }}
+                h1 {{ color: #1565c0; border-bottom: 3px solid #1565c0; padding-bottom: 10px; margin-bottom: 20px; }}
+                
+                .section-header {{ 
+                    background-color: #e3f2fd; 
+                    color: #0d47a1; 
+                    padding: 8px 12px; 
+                    font-weight: bold; 
+                    font-size: 1.1em;
+                    margin-top: 20px; 
+                    border-left: 5px solid #1565c0;
+                }}
+                
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                th {{ text-align: right; background-color: #f5f5f5; padding: 6px; border: 1px solid #e0e0e0; color: #424242; font-weight: bold; }}
+                th.left-align {{ text-align: left; }}
+                td {{ padding: 6px; border: 1px solid #f0f0f0; text-align: right; }}
+                td.left-align {{ text-align: left; }}
+                
+                .param-table td {{ border: none; text-align: left; padding: 4px; }}
+                .param-label {{ font-weight: bold; width: 220px; }}
+                
+                .highlight {{ font-weight: bold; color: #0277bd; }}
+                .notes-box {{ background-color: #fffde7; padding: 15px; border: 1px solid #fff9c4; margin-top: 10px; white-space: pre-wrap; }}
+                
+                .out-of-range {{ color: #d32f2f; font-weight: bold; }}
+                .in-range {{ color: #2e7d32; }}
+                
+                .bar-container {{ background-color: #f0f0f0; height: 12px; width: 100%; border-radius: 2px; }}
+                .bar-fill {{ background-color: #1976d2; height: 100%; border-radius: 2px; }}
             </style>
         </head>
         <body>
             <h1>{recipe_name}</h1>
             
-            <h2>Batch Details</h2>
-            <p>
-                <b>Superfat:</b> {self.calculator.superfat_percent}% &nbsp;|&nbsp; 
-                <b>Lye Type:</b> {self.calculator.lye_type} &nbsp;|&nbsp; 
-                <b>Water Method:</b> {self.calculator.water_calc_method}
-            </p>
+            <div class="section-header">Batch Parameters</div>
+            <table class="param-table">
+                <tr><td class="param-label">Total Oil Weight:</td><td>{self.calculator.convert_weight(props['total_oil_weight'], 'pounds'):.2f} lbs &nbsp;/&nbsp; {self.calculator.convert_weight(props['total_oil_weight'], 'ounces'):.2f} oz &nbsp;/&nbsp; {props['total_oil_weight']:.2f} g</td></tr>
+                <tr><td class="param-label">Water as percent of oil weight:</td><td>{(props['water_weight'] / props['total_oil_weight'] * 100) if props['total_oil_weight'] else 0:.2f} %</td></tr>
+                <tr><td class="param-label">Super Fat/Discount:</td><td>{self.calculator.superfat_percent} %</td></tr>
+                <tr><td class="param-label">Lye Concentration:</td><td>{(props['lye_weight'] / (props['lye_weight'] + props['water_weight']) * 100) if (props['lye_weight'] + props['water_weight']) else 0:.3f} %</td></tr>
+                <tr><td class="param-label">Water : Lye Ratio:</td><td>{(props['water_weight'] / props['lye_weight']) if props['lye_weight'] else 0:.4f}:1</td></tr>
+                <tr><td class="param-label">Lye Type:</td><td>{self.calculator.lye_type}</td></tr>
+            </table>
             
-            <h2>Oils</h2>
+            <div class="section-header">Oils & Ingredients</div>
             <table>
-                <tr><th>Oil Name</th><th>Weight ({unit_abbr})</th><th>%</th></tr>
+                <tr><th class="left-align">Oil Name</th><th>%</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
         """
         
         total_oil = props['total_oil_weight']
         for name, weight in self.calculator.oils.items():
             pct = (weight / total_oil * 100) if total_oil > 0 else 0
-            html += f"<tr><td>{name}</td><td>{fmt(weight)}</td><td>{pct:.1f}%</td></tr>"
+            html += f"<tr><td class='left-align'>{name}</td><td>{pct:.1f}</td><td>{weight/453.592:.3f}</td><td>{weight/28.3495:.2f}</td><td>{weight:.2f}</td></tr>"
             
         html += f"""
+                <tr style="font-weight:bold; background-color:#fafafa;"><td class="left-align">Totals</td><td>100.0</td><td>{total_oil/453.592:.3f}</td><td>{total_oil/28.3495:.2f}</td><td>{total_oil:.2f}</td></tr>
             </table>
             
-            <h2>Lye & Liquids</h2>
+            <div class="section-header">Lye & Liquids</div>
             <table>
-                <tr><td><b>Water / Liquid Amount:</b></td><td class="highlight">{fmt(props['water_weight'])} {unit_abbr}</td></tr>
-                <tr><td><b>Lye Amount:</b></td><td class="highlight">{fmt(props['lye_weight'])} {unit_abbr}</td></tr>
-                <tr><td><b>Total Batch Weight:</b></td><td>{fmt(props['total_batch_weight'])} {unit_abbr}</td></tr>
+                <tr><th class="left-align">Item</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
+                <tr><td class="left-align">Water / Liquid</td><td>{props['water_weight']/453.592:.3f}</td><td>{props['water_weight']/28.3495:.2f}</td><td>{props['water_weight']:.2f}</td></tr>
+                <tr><td class="left-align">Lye - {self.calculator.lye_type}</td><td>{props['lye_weight']/453.592:.3f}</td><td>{props['lye_weight']/28.3495:.2f}</td><td>{props['lye_weight']:.2f}</td></tr>
             </table>
         """
         
         if self.calculator.additives:
-            html += "<h2>Additives</h2><table><tr><th>Additive</th><th>Amount</th></tr>"
+            html += """
+            <div class="section-header">Additives</div>
+            <table>
+                <tr><th class="left-align">Additive</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
+            """
             for name, weight in self.calculator.additives.items():
-                html += f"<tr><td>{name}</td><td>{fmt(weight)} {unit_abbr}</td></tr>"
+                html += f"<tr><td class='left-align'>{name}</td><td>{weight/453.592:.3f}</td><td>{weight/28.3495:.2f}</td><td>{weight:.2f}</td></tr>"
             html += "</table>"
             
+        # Calculate true total weight (Oils + Water + Lye + Additives)
+        additive_weight = sum(self.calculator.additives.values())
+        true_total_weight = props['total_batch_weight'] + additive_weight
+        
+        html += f"""
+            <div class="section-header">Batch Totals</div>
+            <table>
+                <tr><th class="left-align">Item</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
+                <tr style="font-weight:bold;"><td class="left-align">Total Batch Weight</td><td>{true_total_weight/453.592:.3f}</td><td>{true_total_weight/28.3495:.2f}</td><td>{true_total_weight:.2f}</td></tr>
+            </table>
+        """
+        
+        # Two-column layout for Qualities and FA
+        html += """
+        <table style="border: none; margin-top: 20px;">
+            <tr style="vertical-align: top;">
+                <td style="width: 48%; border: none; padding: 0; padding-right: 10px;">
+                    <div class="section-header" style="margin-top: 0;">Soap Qualities</div>
+                    <table>
+                        <tr><th class="left-align">Quality</th><th>Range</th><th>Value</th></tr>
+        """
+        
+        for name, min_val, max_val in quality_ranges:
+            val = int(round(qualities.get(name.lower(), 0)))
+            style_class = "out-of-range" if (val < min_val or val > max_val) else "in-range"
+            html += f"<tr><td class='left-align'>{name}</td><td>{min_val} - {max_val}</td><td class='{style_class}'>{val}</td></tr>"
+            
+        html += """
+                    </table>
+                </td>
+                <td style="width: 4%; border: none;"></td>
+                <td style="width: 48%; border: none; padding: 0;">
+                    <div class="section-header" style="margin-top: 0;">Fatty Acid Profile</div>
+                    <table>
+                        <tr><th class="left-align">Acid</th><th>%</th></tr>
+        """
+        
+        fa_order = ['lauric', 'myristic', 'palmitic', 'stearic', 'ricinoleic', 'oleic', 'linoleic', 'linolenic']
+        for fa in fa_order:
+            val = float(fa_profile.get(fa, 0.0))
+            if val > 0.1: # Only show present FAs
+                html += f"""
+                <tr>
+                    <td class='left-align'>{fa.capitalize()}</td>
+                    <td>{val:.1f}%</td>
+                </tr>
+                """
+                
+        html += """
+                    </table>
+                </td>
+            </tr>
+        </table>
+        """
+            
         if notes:
-            html += f"<h2>Instructions & Notes</h2><div class='notes'><pre>{notes}</pre></div>"
+            html += f"<div class='section-header'>Instructions & Notes</div><div class='notes-box'>{notes}</div>"
             
         html += "</body></html>"
         self.viewer.setHtml(html)
@@ -978,6 +1103,8 @@ class RecipeReportWidget(QWidget):
 
 class InventoryCostWidget(QWidget):
     """Widget for managing ingredient costs"""
+    
+    costs_changed = pyqtSignal()
     
     def __init__(self, cost_manager):
         super().__init__()
@@ -1001,6 +1128,7 @@ class InventoryCostWidget(QWidget):
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.ingredient_combo.setCompleter(completer)
+        
         form_layout.addWidget(self.ingredient_combo, 0, 1)
         
         form_layout.addWidget(QLabel("Price Paid ($):"), 1, 0)
@@ -1020,9 +1148,24 @@ class InventoryCostWidget(QWidget):
         self.unit_combo.addItems(["grams", "oz", "lbs", "kg", "liters", "gallons", "fl oz"])
         form_layout.addWidget(self.unit_combo, 3, 1)
         
-        save_btn = QPushButton("Save Cost")
+        # Buttons
+        btn_layout = QHBoxLayout()
+        
+        clear_btn = QPushButton("Clear Form")
+        clear_btn.clicked.connect(self.clear_form)
+        btn_layout.addWidget(clear_btn)
+        
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self.delete_cost)
+        delete_btn.setStyleSheet("background-color: #d32f2f; color: white;")
+        btn_layout.addWidget(delete_btn)
+        
+        save_btn = QPushButton("Save / Update")
         save_btn.clicked.connect(self.save_cost)
-        form_layout.addWidget(save_btn, 4, 0, 1, 2)
+        save_btn.setStyleSheet("background-color: #388e3c; color: white;")
+        btn_layout.addWidget(save_btn)
+        
+        form_layout.addLayout(btn_layout, 4, 0, 1, 2)
         
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
@@ -1031,6 +1174,9 @@ class InventoryCostWidget(QWidget):
         self.cost_table = QTableWidget()
         self.cost_table.setColumnCount(4)
         self.cost_table.setHorizontalHeaderLabels(["Ingredient", "Price", "Quantity", "Cost/g"])
+        self.cost_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.cost_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.cost_table.itemSelectionChanged.connect(self.load_selected_item)
         layout.addWidget(self.cost_table)
         
         self.refresh_table()
@@ -1046,6 +1192,60 @@ class InventoryCostWidget(QWidget):
         if name and qty > 0:
             self.cost_manager.set_cost(name, price, qty, unit)
             self.refresh_table()
+            self.clear_form()
+            self.costs_changed.emit()
+            
+    def delete_cost(self):
+        """Delete selected cost item"""
+        row = self.cost_table.currentRow()
+        if row < 0:
+            return
+            
+        name = self.cost_table.item(row, 0).text()
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Are you sure you want to delete '{name}' from inventory?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            if name in self.cost_manager.costs:
+                del self.cost_manager.costs[name]
+                # Try to persist changes
+                if hasattr(self.cost_manager, 'save_costs'):
+                    self.cost_manager.save_costs()
+                elif hasattr(self.cost_manager, 'save'):
+                    self.cost_manager.save()
+                
+                self.refresh_table()
+                self.clear_form()
+                self.costs_changed.emit()
+
+    def load_selected_item(self):
+        """Load selected item into form for editing"""
+        row = self.cost_table.currentRow()
+        if row >= 0:
+            name_item = self.cost_table.item(row, 0)
+            if name_item:
+                name = name_item.text()
+                if name in self.cost_manager.costs:
+                    data = self.cost_manager.costs[name]
+                    self.ingredient_combo.setCurrentText(name)
+                    self.price_spin.setValue(float(data.get('price', 0.0)))
+                    self.qty_spin.setValue(float(data.get('quantity', 0.0)))
+                    
+                    unit = data.get('unit', 'grams')
+                    index = self.unit_combo.findText(unit)
+                    if index >= 0:
+                        self.unit_combo.setCurrentIndex(index)
+
+    def clear_form(self):
+        """Clear the input form"""
+        self.ingredient_combo.setCurrentIndex(-1)
+        self.price_spin.setValue(0.0)
+        self.qty_spin.setValue(0.0)
+        self.unit_combo.setCurrentIndex(0)
+        self.cost_table.clearSelection()
             
     def refresh_table(self):
         self.cost_table.setRowCount(0)
@@ -1075,3 +1275,117 @@ class InventoryCostWidget(QWidget):
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.ingredient_combo.setCompleter(completer)
+
+
+class ProfitAnalysisWidget(QWidget):
+    """Widget for calculating business profit and pricing"""
+    
+    def __init__(self):
+        super().__init__()
+        self.batch_cost = 0.0
+        self.bar_count = 0.0
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # Inputs
+        input_group = QGroupBox("Cost & Pricing Inputs")
+        form = QFormLayout()
+        
+        self.labor_rate_spin = QDoubleSpinBox()
+        self.labor_rate_spin.setRange(0, 500)
+        self.labor_rate_spin.setValue(20.0) # $20/hr default
+        self.labor_rate_spin.setKeyboardTracking(False)
+        self.labor_rate_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Labor Rate ($/hr):", self.labor_rate_spin)
+        
+        self.labor_hours_spin = QDoubleSpinBox()
+        self.labor_hours_spin.setRange(0, 100)
+        self.labor_hours_spin.setValue(1.0)
+        self.labor_hours_spin.setSingleStep(0.25)
+        self.labor_hours_spin.setKeyboardTracking(False)
+        self.labor_hours_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Labor Hours (Batch):", self.labor_hours_spin)
+        
+        self.packaging_cost_spin = QDoubleSpinBox()
+        self.packaging_cost_spin.setRange(0, 50)
+        self.packaging_cost_spin.setValue(0.50)
+        self.packaging_cost_spin.setKeyboardTracking(False)
+        self.packaging_cost_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Packaging Cost ($/bar):", self.packaging_cost_spin)
+        
+        self.overhead_spin = QDoubleSpinBox()
+        self.overhead_spin.setRange(0, 100)
+        self.overhead_spin.setValue(10.0)
+        self.overhead_spin.setToolTip("Percentage of material + labor to cover overhead (electricity, rent, etc)")
+        self.overhead_spin.setKeyboardTracking(False)
+        self.overhead_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Overhead Markup (%):", self.overhead_spin)
+        
+        self.profit_margin_spin = QDoubleSpinBox()
+        self.profit_margin_spin.setRange(0, 500)
+        self.profit_margin_spin.setValue(50.0)
+        self.profit_margin_spin.setKeyboardTracking(False)
+        self.profit_margin_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Desired Profit Margin (%):", self.profit_margin_spin)
+        
+        input_group.setLayout(form)
+        layout.addWidget(input_group)
+        
+        # Results
+        results_group = QGroupBox("Financial Analysis")
+        r_layout = QFormLayout()
+        
+        self.total_cogs_lbl = QLabel("$0.00")
+        r_layout.addRow("Total Batch Cost (Mat + Labor + Ovhd):", self.total_cogs_lbl)
+        
+        self.cogs_per_bar_lbl = QLabel("$0.00")
+        self.cogs_per_bar_lbl.setStyleSheet("font-weight: bold;")
+        r_layout.addRow("Cost Per Bar (Production):", self.cogs_per_bar_lbl)
+        
+        self.wholesale_price_lbl = QLabel("$0.00")
+        r_layout.addRow("Suggested Wholesale Price:", self.wholesale_price_lbl)
+        
+        self.retail_price_lbl = QLabel("$0.00")
+        self.retail_price_lbl.setStyleSheet("font-weight: bold; color: #4fc3f7; font-size: 14px;")
+        r_layout.addRow("Suggested Retail Price:", self.retail_price_lbl)
+        
+        self.profit_per_batch_lbl = QLabel("$0.00")
+        r_layout.addRow("Net Profit Per Batch:", self.profit_per_batch_lbl)
+        
+        results_group.setLayout(r_layout)
+        layout.addWidget(results_group)
+        
+        layout.addStretch()
+        self.setLayout(layout)
+        
+    def update_data(self, batch_material_cost, bar_count):
+        self.batch_cost = batch_material_cost
+        self.bar_count = bar_count
+        self.calculate_profit()
+        
+    def calculate_profit(self):
+        labor_cost = self.labor_rate_spin.value() * self.labor_hours_spin.value()
+        overhead_pct = self.overhead_spin.value() / 100.0
+        
+        base_cost = self.batch_cost + labor_cost
+        total_batch_cost = base_cost * (1 + overhead_pct)
+        
+        packaging_total = self.packaging_cost_spin.value() * self.bar_count
+        total_cogs = total_batch_cost + packaging_total
+        
+        cogs_per_bar = total_cogs / self.bar_count if self.bar_count > 0 else 0.0
+        
+        margin_pct = self.profit_margin_spin.value() / 100.0
+        # Simple markup model: Cost * (1 + Margin)
+        retail_price = cogs_per_bar * (1 + margin_pct)
+        wholesale_price = retail_price * 0.5 # Rule of thumb: Wholesale is half retail
+        
+        profit_per_batch = (retail_price * self.bar_count) - total_cogs
+        
+        self.total_cogs_lbl.setText(f"${total_cogs:.2f}")
+        self.cogs_per_bar_lbl.setText(f"${cogs_per_bar:.2f}")
+        self.wholesale_price_lbl.setText(f"${wholesale_price:.2f}")
+        self.retail_price_lbl.setText(f"${retail_price:.2f}")
+        self.profit_per_batch_lbl.setText(f"${profit_per_batch:.2f}")

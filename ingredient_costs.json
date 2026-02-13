@@ -33,5 +33,10 @@
         "price": 24.98,
         "quantity": 128.0,
         "unit": "oz"
+    },
+    "Oatmeal Milk And Honey (Fragrance Oil)": {
+        "price": 12.99,
+        "quantity": 2.0,
+        "unit": "oz"
     }
 }
