@@ -1,1 +1,55 @@
-[]
+[
+    {
+        "id": "c26f2986-cdd1-4e48-98be-c2f857665d89",
+        "lot_number": "20260215-97FE",
+        "recipe_name": "Love Spell",
+        "date_made": "2026-02-15",
+        "cure_date": "2026-03-15",
+        "status": "Curing",
+        "total_weight": 1290.03,
+        "recipe_snapshot": {
+            "oils": {
+                "Lard, Pig Tallow (Manteca)": 362.8736,
+                "Castor Oil": 54.431039999999996,
+                "Olive Oil": 217.72415999999998,
+                "Coconut Oil": 272.1552
+            },
+            "superfat_percent": 8.0,
+            "water_to_lye_ratio": 5,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "concentration",
+            "water_percent": 38.0,
+            "lye_concentration": 33.0,
+            "properties": {
+                "total_oil_weight": 907.18,
+                "lye_weight": 126.34,
+                "water_weight": 256.51,
+                "total_batch_weight": 1290.03,
+                "lye_percentage": 13.93,
+                "water_percentage": 28.28,
+                "fa_breakdown": {
+                    "lauric": 14.4,
+                    "myristic": 6.1,
+                    "palmitic": 17.26,
+                    "stearic": 6.82,
+                    "oleic": 37.6,
+                    "linoleic": 6.12,
+                    "linolenic": 0.24,
+                    "ricinoleic": 5.4
+                },
+                "relative_qualities": {
+                    "hardness": 44.58,
+                    "cleansing": 20.499999999999996,
+                    "bubbly": 25.9,
+                    "creamy": 29.480000000000004,
+                    "conditioning": 49.36,
+                    "iodine": 51.36,
+                    "ins": 163.89999999999998
+                }
+            },
+            "name": "Love Spell"
+        },
+        "notes": "[2026-02-15 19:09]  - Poured Mixture into mold"
+    }
+]

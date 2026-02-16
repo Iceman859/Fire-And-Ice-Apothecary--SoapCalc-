@@ -443,6 +443,8 @@ class CalculationResultsWidget(QWidget):
         self.last_properties = {}
         self.last_unit = "grams"
         self.last_name = None
+        self.mb_lye_enabled = False
+        self.mb_lye_concentration = 50.0
         self.setup_ui()
 
     def setup_ui(self):
@@ -466,6 +468,7 @@ class CalculationResultsWidget(QWidget):
         weight_keys = [
             "Total Oil Weight",
             "Water Weight",
+            "Add'l Water",  # Added for MB
             "Lye Weight",
             "Total Batch Weight",
             "Total Batch Cost",
@@ -477,6 +480,7 @@ class CalculationResultsWidget(QWidget):
             val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
             w_layout.addWidget(val_lbl, i, 1)
             self.weight_labels[key] = val_lbl
+        self.weight_labels["Add'l Water"].setVisible(False)  # Hide by default
 
         self.weights_group.setLayout(w_layout)
         layout.addWidget(self.weights_group)
@@ -509,6 +513,9 @@ class CalculationResultsWidget(QWidget):
 
         # Predicted Qualities
         self.qualities_group = QGroupBox("Soap Bar Quality")
+        self.qualities_group.setToolTip(
+            "Theoretical qualities based on oil fatty acid profile.\nThese values do not change with Superfat/Lye Discount."
+        )
         q_layout = QGridLayout()
 
         # Headers
@@ -543,6 +550,11 @@ class CalculationResultsWidget(QWidget):
 
         layout.addStretch()
         self.setLayout(layout)
+
+    def set_master_batch_mode(self, enabled: bool, concentration: float):
+        self.mb_lye_enabled = enabled
+        self.mb_lye_concentration = concentration
+        self.update_results(self.last_properties, self.last_unit, self.last_name)
 
     def update_results(
         self, properties: dict, unit_system: str = "grams", recipe_name: str = None
@@ -586,6 +598,33 @@ class CalculationResultsWidget(QWidget):
             lye_type = self.calculator.lye_type
             total_cost += lye_weight * self.cost_manager.get_cost_per_gram(lye_type)
 
+        # Handle Master Batch Lye Logic
+        display_lye_label = "Lye Weight"
+        display_lye_weight = properties["lye_weight"]
+        display_water_weight = properties["water_weight"]
+        additional_water = 0.0
+        show_additional = False
+
+        if self.mb_lye_enabled and self.mb_lye_concentration > 0:
+            # Calculate Solution Weight required to get the pure lye amount
+            # Weight = Pure Lye / (Concentration %)
+            solution_weight = properties["lye_weight"] / (
+                self.mb_lye_concentration / 100.0
+            )
+
+            # Water contained in that solution
+            water_in_solution = solution_weight - properties["lye_weight"]
+
+            # Remaining water needed
+            additional_water = properties["water_weight"] - water_in_solution
+
+            display_lye_label = f"Lye Solution ({self.mb_lye_concentration:.0f}%)"
+            display_lye_weight = solution_weight
+            show_additional = True
+
+            # Note: If additional_water is negative, it means the solution adds too much water
+            # The UI will show a negative number, indicating an issue to the user.
+
         # Calculate Total Weight including Additives (Fragrance, etc.)
         # properties['total_batch_weight'] usually contains just Oils + Water + Lye
         additive_weight = sum(self.calculator.additives.values())
@@ -594,12 +633,28 @@ class CalculationResultsWidget(QWidget):
         # Batch Weights
         weights_map = {
             "Total Oil Weight": properties["total_oil_weight"],
-            "Water Weight": properties["water_weight"],
-            "Lye Weight": properties["lye_weight"],
+            "Water Weight": display_water_weight,  # Original total water
+            "Add'l Water": additional_water,
+            "Lye Weight": display_lye_weight,
             # Use the true total that includes fragrance
             "Total Batch Weight": true_total_weight,
             "Total Batch Cost": total_cost,
         }
+
+        # Update Labels
+        # Update Lye Label text dynamically
+        lye_lbl_widget = (
+            self.weights_group.layout().itemAtPosition(3, 0).widget()
+        )  # Row 3 is Lye
+        if lye_lbl_widget:
+            lye_lbl_widget.setText(f"{display_lye_label}:")
+
+        # Toggle Additional Water visibility
+        self.weight_labels["Add'l Water"].setVisible(show_additional)
+        add_water_lbl_widget = self.weights_group.layout().itemAtPosition(2, 0).widget()
+        if add_water_lbl_widget:
+            add_water_lbl_widget.setVisible(show_additional)
+            add_water_lbl_widget.setText("Add'l Water:")
 
         for key, val in weights_map.items():
             if key in self.weight_labels:
@@ -741,6 +796,7 @@ class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
 
     parameters_changed = pyqtSignal()
+    master_batch_changed = pyqtSignal(bool, float)  # enabled, concentration
 
     def __init__(self, calculator: SoapCalculator):
         super().__init__()
@@ -758,6 +814,24 @@ class RecipeParametersWidget(QWidget):
         self.lye_combo.currentTextChanged.connect(self.on_lye_type_changed)
         lye_layout.addWidget(self.lye_combo)
         layout.addLayout(lye_layout)
+
+        # Master Batch Lye Option
+        from PyQt6.QtWidgets import QCheckBox
+
+        mb_layout = QHBoxLayout()
+        self.mb_check = QCheckBox("Use Master Batch Lye")
+        self.mb_check.toggled.connect(self.on_mb_changed)
+        mb_layout.addWidget(self.mb_check)
+
+        self.mb_conc_spin = QDoubleSpinBox()
+        self.mb_conc_spin.setRange(1, 99)
+        self.mb_conc_spin.setValue(50.0)
+        self.mb_conc_spin.setSuffix("% Conc")
+        self.mb_conc_spin.setToolTip("Concentration of your pre-mixed lye solution")
+        self.mb_conc_spin.valueChanged.connect(self.on_mb_changed)
+        self.mb_conc_spin.setVisible(False)  # Hidden by default
+        mb_layout.addWidget(self.mb_conc_spin)
+        layout.addLayout(mb_layout)
 
         # Superfat
         superfat_layout = QHBoxLayout()
@@ -832,6 +906,11 @@ class RecipeParametersWidget(QWidget):
         value = self.water_value_spinbox.value()
         self.calculator.set_water_calc_method(self.calculator.water_calc_method, value)
         self.parameters_changed.emit()
+
+    def on_mb_changed(self):
+        enabled = self.mb_check.isChecked()
+        self.mb_conc_spin.setVisible(enabled)
+        self.master_batch_changed.emit(enabled, self.mb_conc_spin.value())
 
 
 class SettingsWidget(QWidget):
@@ -1349,6 +1428,13 @@ class InventoryCostWidget(QWidget):
         self.threshold_spin.setValue(100.0)  # Default 100 units
         self.threshold_spin.valueChanged.connect(self.refresh_table)
         alert_layout.addWidget(self.threshold_spin)
+
+        alert_layout.addStretch()
+        self.total_value_label = QLabel("Total Inventory Value: $0.00")
+        self.total_value_label.setStyleSheet(
+            "font-weight: bold; font-size: 14px; color: #4caf50;"
+        )
+        alert_layout.addWidget(self.total_value_label)
         layout.addLayout(alert_layout)
 
         # Input Form Group
@@ -1521,6 +1607,9 @@ class InventoryCostWidget(QWidget):
 
         threshold = self.threshold_spin.value()
 
+        total_value = self.cost_manager.get_total_inventory_value()
+        self.total_value_label.setText(f"Total Inventory Value: ${total_value:,.2f}")
+
         for i, (name, data) in enumerate(sorted(costs.items())):
             price = data.get("price", 0.0)
             qty = float(data.get("quantity", 0.0))
@@ -1607,6 +1696,16 @@ class ProfitAnalysisWidget(QWidget):
         self.labor_hours_spin.valueChanged.connect(self.calculate_profit)
         form.addRow("Labor Hours (Batch):", self.labor_hours_spin)
 
+        self.waste_spin = QDoubleSpinBox()
+        self.waste_spin.setRange(0, 100)
+        self.waste_spin.setValue(5.0)  # Default 5% waste
+        self.waste_spin.setSuffix("%")
+        self.waste_spin.setToolTip(
+            "Buffer for batter left in bowl, spills, or cure shrinkage"
+        )
+        self.waste_spin.valueChanged.connect(self.calculate_profit)
+        form.addRow("Waste / Shrinkage:", self.waste_spin)
+
         self.packaging_cost_spin = QDoubleSpinBox()
         self.packaging_cost_spin.setRange(0, 50)
         self.packaging_cost_spin.setValue(0.50)
@@ -1673,8 +1772,11 @@ class ProfitAnalysisWidget(QWidget):
     def calculate_profit(self):
         labor_cost = self.labor_rate_spin.value() * self.labor_hours_spin.value()
         overhead_pct = self.overhead_spin.value() / 100.0
+        waste_pct = self.waste_spin.value() / 100.0
 
-        base_cost = self.batch_cost + labor_cost
+        # Apply waste factor to material cost (you pay for ingredients you don't sell)
+        adjusted_material_cost = self.batch_cost * (1 + waste_pct)
+        base_cost = adjusted_material_cost + labor_cost
         total_batch_cost = base_cost * (1 + overhead_pct)
 
         packaging_total = self.packaging_cost_spin.value() * self.bar_count
@@ -1714,6 +1816,7 @@ class ProfitAnalysisWidget(QWidget):
             presets[name] = {
                 "labor_rate": self.labor_rate_spin.value(),
                 "labor_hours": self.labor_hours_spin.value(),
+                "waste": self.waste_spin.value(),
                 "packaging": self.packaging_cost_spin.value(),
                 "overhead": self.overhead_spin.value(),
                 "margin": self.profit_margin_spin.value(),
@@ -1744,6 +1847,7 @@ class ProfitAnalysisWidget(QWidget):
         if data:
             self.labor_rate_spin.setValue(float(data.get("labor_rate", 20.0)))
             self.labor_hours_spin.setValue(float(data.get("labor_hours", 1.0)))
+            self.waste_spin.setValue(float(data.get("waste", 5.0)))
             self.packaging_cost_spin.setValue(float(data.get("packaging", 0.50)))
             self.overhead_spin.setValue(float(data.get("overhead", 10.0)))
             self.profit_margin_spin.setValue(float(data.get("margin", 50.0)))

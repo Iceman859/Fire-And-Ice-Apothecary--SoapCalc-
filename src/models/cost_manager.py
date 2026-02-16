@@ -148,6 +148,14 @@ class CostManager:
 
         # Update quantity
         new_qty = max(0.0, current_qty - deduct_qty)
+
+        # Update total price (value) to maintain consistent cost-per-unit
+        if current_qty > 0:
+            current_price = float(data.get("price", 0.0))
+            # Proportional reduction: New Value = Old Value * (New Qty / Old Qty)
+            new_price = current_price * (new_qty / current_qty)
+            data["price"] = round(new_price, 2)
+
         data["quantity"] = round(new_qty, 2)
         self.save_costs()
 
@@ -192,3 +200,10 @@ class CostManager:
 
         required_qty = self._convert_from_grams(amount_grams, unit)
         return current_qty >= required_qty
+
+    def get_total_inventory_value(self) -> float:
+        """Calculate total dollar value of all inventory."""
+        total = 0.0
+        for data in self.costs.values():
+            total += float(data.get("price", 0.0))
+        return total

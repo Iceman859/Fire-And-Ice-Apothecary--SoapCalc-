@@ -40,6 +40,7 @@ from .widgets import (
     RecipeReportWidget,
     SettingsWidget,
 )
+from .master_batch import MasterBatchWidget
 
 
 class MainWindow(QMainWindow):
@@ -199,6 +200,10 @@ class MainWindow(QMainWindow):
         # Recipe Tab
         recipe_tab = self.create_recipe_tab()
         tabs.addTab(recipe_tab, "Recipe Calculator")
+
+        # Master Batch Tab
+        self.mb_tab = self.create_mb_tab()
+        tabs.addTab(self.mb_tab, "Master Batching")
 
         # FA Breakdown Tab
         fa_tab = self.create_fa_tab()
@@ -396,6 +401,15 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
 
+    def create_mb_tab(self):
+        """Create the Master Batch management tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.mb_widget = MasterBatchWidget(self.calculator)
+        layout.addWidget(self.mb_widget)
+        tab.setLayout(layout)
+        return tab
+
     def create_fa_tab(self):
         """Create the fatty-acid breakdown tab"""
         tab = QWidget()
@@ -462,6 +476,11 @@ class MainWindow(QMainWindow):
         self.recipe_settings.parameters_changed.connect(self.update_results)
         self.recipe_settings.parameters_changed.connect(self.save_preferences)
 
+        # Connect Master Batch Lye settings to Results Widget
+        self.recipe_settings.master_batch_changed.connect(
+            self.results_widget.set_master_batch_mode
+        )
+
         self.oil_input_widget.oil_added.connect(self.update_oils_table)
         self.oil_input_widget.oil_added.connect(self.update_results)
         self.settings_widget.settings_changed.connect(self.update_results)
@@ -496,6 +515,10 @@ class MainWindow(QMainWindow):
         if index == 0:  # Recipe Tab
             if hasattr(self, "fragrance_widget"):
                 self.fragrance_widget.refresh_ingredients()
+            # Refresh oils in case a master batch was created
+            if hasattr(self, "oil_input_widget"):
+                self.oil_input_widget.refresh_oils()
+
         # Refresh batch list
         if self.tabs.widget(index) == self.batch_tab:
             self.batch_widget.refresh_table()

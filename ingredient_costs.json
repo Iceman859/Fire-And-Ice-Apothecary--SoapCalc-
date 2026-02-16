@@ -1,12 +1,12 @@
 {
     "Shea Butter": {
-        "price": 19.99,
-        "quantity": 1.0,
+        "price": 9.99,
+        "quantity": 0.5,
         "unit": "lbs"
     },
     "Castor Oil": {
-        "price": 15.29,
-        "quantity": 24.32,
+        "price": 11.81,
+        "quantity": 18.8,
         "unit": "fl oz"
     },
     "Goat Milk": {
@@ -15,28 +15,53 @@
         "unit": "oz"
     },
     "NaOH": {
-        "price": 15.99,
-        "quantity": 1.44,
+        "price": 6.69,
+        "quantity": 0.6,
         "unit": "lbs"
     },
     "Kaolin Clay": {
-        "price": 8.99,
-        "quantity": 3.5,
+        "price": 8.54,
+        "quantity": 3.32,
         "unit": "oz"
     },
     "Oatmeal Milk And Honey (Fragrance Oil)": {
-        "price": 12.99,
-        "quantity": 0.0,
+        "price": 6.5,
+        "quantity": 1.0,
         "unit": "oz"
     },
     "Coconut Oil": {
-        "price": 24.98,
-        "quantity": 109.44,
+        "price": 18.48,
+        "quantity": 80.96,
         "unit": "oz"
     },
     "Olive Oil": {
-        "price": 22.98,
-        "quantity": 101.0,
+        "price": 16.57,
+        "quantity": 72.84,
+        "unit": "oz"
+    },
+    "Lard, Pig Tallow (Manteca)": {
+        "price": 16.7,
+        "quantity": 6.4,
+        "unit": "lbs"
+    },
+    "Sugar": {
+        "price": 3.19,
+        "quantity": 4.0,
+        "unit": "lbs"
+    },
+    "Sodium Lactate": {
+        "price": 22.49,
+        "quantity": 38.4,
+        "unit": "oz"
+    },
+    "Cool Water Fragrance": {
+        "price": 12.95,
+        "quantity": 2.0,
+        "unit": "fl oz"
+    },
+    "Love Spell": {
+        "price": 6.95,
+        "quantity": 0.5,
         "unit": "oz"
     }
 }
