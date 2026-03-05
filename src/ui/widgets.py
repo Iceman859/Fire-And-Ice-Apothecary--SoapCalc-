@@ -21,13 +21,23 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QInputDialog,
     QLineEdit,
+    QStackedWidget,
+    QRadioButton,
+    QButtonGroup,
+    QCheckBox,
 )
-from PyQt6.QtCore import pyqtSignal, Qt, QSettings
+from PyQt6.QtCore import pyqtSignal, Qt, QSettings, QTimer
 from PyQt6.QtGui import QColor
 from src.models import SoapCalculator, RecipeManager
 from src.data import get_all_oil_names
-from src.data.additives import get_all_additive_names
+from src.ui.candy_ingredients import get_all_candy_ingredient_names
+from src.data.additives import (
+    get_all_additive_names,
+    add_additive_entry,
+    get_additive_info,
+)
 from datetime import datetime
+import math
 
 # optional matplotlib for charts
 try:
@@ -49,15 +59,30 @@ except ImportError:
     _HAS_PRINTER = False
 
 
+class SelectAllSpinBox(QDoubleSpinBox):
+    """SpinBox that selects all text on focus for easier data entry"""
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)
+
+
 class OilInputWidget(QWidget):
     """Widget for adding oils to recipe"""
 
     oil_added = pyqtSignal()
 
-    def __init__(self, calculator: SoapCalculator):
+    def __init__(
+        self,
+        calculator: SoapCalculator,
+        mode: str = "soap",
+        ingredient_names: list = None,
+    ):
         super().__init__()
         self.calculator = calculator
         self.target_weight_callback = None
+        self.mode = mode
+        self.ingredient_names = ingredient_names
         self.setup_ui()
 
     def setup_ui(self):
@@ -65,11 +90,18 @@ class OilInputWidget(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
 
+        label_text = "Ingredient:" if self.mode == "candy" else "Oil:"
         # Oil selection
-        layout.addWidget(QLabel("Oil:"))
+        layout.addWidget(QLabel(label_text))
         self.oil_combo = QComboBox()
         self.oil_combo.setEditable(True)
-        names = get_all_oil_names()
+
+        if self.ingredient_names:
+            names = self.ingredient_names
+        elif self.mode == "candy":
+            names = get_all_candy_ingredient_names()
+        else:
+            names = get_all_oil_names()
         self.oil_combo.addItems(names)
         # simple completion
         self.oil_combo.setCurrentIndex(-1)  # Start blank
@@ -139,7 +171,11 @@ class OilInputWidget(QWidget):
         """Refresh the oil list from database"""
         current = self.oil_combo.currentText()
         self.oil_combo.clear()
-        names = get_all_oil_names()
+
+        if self.mode == "candy":
+            names = get_all_candy_ingredient_names()
+        else:
+            names = get_all_oil_names()
         self.oil_combo.addItems(names)
         self.oil_combo.setCurrentText(current)
 
@@ -154,68 +190,91 @@ class AdditiveInputWidget(QWidget):
 
     additive_added = pyqtSignal()
 
-    def __init__(self, calculator: SoapCalculator):
+    def __init__(self, calculator: SoapCalculator, cost_manager=None):
         super().__init__()
         self.calculator = calculator
+        self.cost_manager = cost_manager
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+        group = QGroupBox("Additives & Water Replacement")
+        layout = QGridLayout()
 
-        layout.addWidget(QLabel("Additive:"))
+        layout.addWidget(QLabel("Additive:"), 0, 0)
         self.add_combo = QComboBox()
         self.add_combo.setEditable(True)
+
+        # Populate with standard additives + inventory
         additive_names = get_all_additive_names()
+        if self.cost_manager:
+            # Add items from inventory
+            inventory_items = sorted(self.cost_manager.costs.keys())
+            additive_names = sorted(list(set(additive_names + inventory_items)))
+
         self.add_combo.addItems(additive_names)
         self.add_combo.setCurrentIndex(-1)  # Start blank
         completer = QCompleter(additive_names)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.add_combo.setCompleter(completer)
-        layout.addWidget(self.add_combo, 2)
+        layout.addWidget(self.add_combo, 0, 1)
 
         # Amount type selector: percent of oils or explicit weight
+        layout.addWidget(QLabel("Mode:"), 1, 0)
         self.amount_type_combo = QComboBox()
-        self.amount_type_combo.addItems(["% of Oils", "Weight"])
+        self.amount_type_combo.addItems(["% of Oils", "Weight / Volume"])
         self.amount_type_combo.currentTextChanged.connect(self.on_amount_type_changed)
-        layout.addWidget(self.amount_type_combo)
+        layout.addWidget(self.amount_type_combo, 1, 1)
+
+        layout.addWidget(QLabel("Amount:"), 2, 0)
 
         # Percent input (default)
         self.percent_widget = QWidget()
         p_layout = QHBoxLayout(self.percent_widget)
         p_layout.setContentsMargins(0, 0, 0, 0)
-        p_layout.addWidget(QLabel("%:"))
         self.add_spin = QDoubleSpinBox()
         self.add_spin.setRange(0, 100)
         self.add_spin.setSingleStep(0.5)
         self.add_spin.setValue(0)
+        self.add_spin.setSuffix("%")
         p_layout.addWidget(self.add_spin)
-        layout.addWidget(self.percent_widget)
 
         # Weight input (hidden by default)
         self.weight_widget = QWidget()
         w_layout = QHBoxLayout(self.weight_widget)
         w_layout.setContentsMargins(0, 0, 0, 0)
-        w_layout.addWidget(QLabel("Amt:"))
         self.add_weight_spin = QDoubleSpinBox()
         self.add_weight_spin.setRange(0, 10000)
         self.add_weight_spin.setSingleStep(1.0)
         self.add_weight_spin.setValue(0.0)
         w_layout.addWidget(self.add_weight_spin)
         self.add_unit_combo = QComboBox()
-        self.add_unit_combo.addItems(["g", "oz", "lbs"])
+        self.add_unit_combo.addItems(["g", "oz", "lbs", "tsp", "tbsp"])
         self.add_unit_combo.setFixedWidth(60)
         w_layout.addWidget(self.add_unit_combo)
 
+        # Add both widgets to the same grid cell (visibility controlled by logic)
+        layout.addWidget(self.percent_widget, 2, 1)
+        layout.addWidget(self.weight_widget, 2, 1)
         self.weight_widget.setVisible(False)
-        layout.addWidget(self.weight_widget)
 
-        add_btn = QPushButton("Add")
+        # Water Replacement Checkbox
+        self.water_replace_check = QCheckBox("Replaces Water?")
+        self.water_replace_check.setToolTip(
+            "Check if this additive replaces water in the recipe (e.g. Milk, Juice)"
+        )
+        layout.addWidget(self.water_replace_check, 3, 0, 1, 2)
+
+        add_btn = QPushButton("Add Additive")
         add_btn.clicked.connect(self.add_additive)
-        layout.addWidget(add_btn)
+        layout.addWidget(add_btn, 4, 0, 1, 2)
 
-        self.setLayout(layout)
+        group.setLayout(layout)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(group)
+        self.setLayout(main_layout)
 
     def add_additive(self):
         name = self.add_combo.currentText()
@@ -228,10 +287,24 @@ class AdditiveInputWidget(QWidget):
         else:
             val = self.add_weight_spin.value()
             unit = self.add_unit_combo.currentText()
-            unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
-            amount_grams = self.calculator.convert_to_grams(val, unit_map[unit])
+
+            if unit == "tsp":
+                amount_grams = val * 5.0  # Approx 5g per tsp (water density)
+            elif unit == "tbsp":
+                amount_grams = val * 15.0  # Approx 15g per tbsp (water density)
+            else:
+                unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
+                amount_grams = self.calculator.convert_to_grams(val, unit_map[unit])
 
         if amount_grams > 0:
+            # Handle Water Replacement Flag
+            if self.water_replace_check.isChecked():
+                # Update the additive info in the database/memory so the calculator knows
+                info = get_additive_info(name)
+                if not info.get("is_water_replacement"):
+                    info["is_water_replacement"] = True
+                    add_additive_entry(name, info)
+
             self.calculator.add_additive(name, amount_grams)
             # reset inputs
             self.add_spin.setValue(0)
@@ -257,6 +330,10 @@ class AdditiveInputWidget(QWidget):
         current = self.add_combo.currentText()
         self.add_combo.clear()
         names = get_all_additive_names()
+        if self.cost_manager:
+            inventory_items = sorted(self.cost_manager.costs.keys())
+            names = sorted(list(set(names + inventory_items)))
+
         self.add_combo.addItems(names)
         self.add_combo.setCurrentText(current)
 
@@ -296,8 +373,22 @@ class FragranceWidget(QWidget):
         ]
         if self.cost_manager:
             # Add items from inventory that aren't already in the list
+            # Filter for fragrance-like items only
             inventory_items = sorted(self.cost_manager.costs.keys())
-            items = sorted(list(set(items + inventory_items)))
+            fragrance_keywords = [
+                "eo",
+                "essential oil",
+                "fragrance",
+                "parfum",
+                "scent",
+                "aroma",
+            ]
+            filtered_inventory = [
+                i
+                for i in inventory_items
+                if any(k in i.lower() for k in fragrance_keywords)
+            ]
+            items = sorted(list(set(items + filtered_inventory)))
 
         self.name_combo.addItems(items)
         self.name_combo.setPlaceholderText("e.g. Lavender EO")
@@ -427,7 +518,20 @@ class FragranceWidget(QWidget):
                 "Fragrance Oil",
             ]
             inventory_items = sorted(self.cost_manager.costs.keys())
-            items = sorted(list(set(items + inventory_items)))
+            fragrance_keywords = [
+                "eo",
+                "essential oil",
+                "fragrance",
+                "parfum",
+                "scent",
+                "aroma",
+            ]
+            filtered_inventory = [
+                i
+                for i in inventory_items
+                if any(k in i.lower() for k in fragrance_keywords)
+            ]
+            items = sorted(list(set(items + filtered_inventory)))
             self.name_combo.addItems(items)
             self.name_combo.setCurrentText(current)
 
@@ -435,10 +539,13 @@ class FragranceWidget(QWidget):
 class CalculationResultsWidget(QWidget):
     """Widget for displaying calculation results"""
 
-    def __init__(self, calculator: SoapCalculator = None, cost_manager=None):
+    def __init__(
+        self, calculator: SoapCalculator = None, cost_manager=None, mode: str = "soap"
+    ):
         super().__init__()
         self.calculator = calculator
         self.cost_manager = cost_manager
+        self.mode = mode
         # Cache for internal updates
         self.last_properties = {}
         self.last_unit = "grams"
@@ -468,7 +575,7 @@ class CalculationResultsWidget(QWidget):
         weight_keys = [
             "Total Oil Weight",
             "Water Weight",
-            "Add'l Water",  # Added for MB
+            "Add'l Water",
             "Lye Weight",
             "Total Batch Weight",
             "Total Batch Cost",
@@ -480,7 +587,12 @@ class CalculationResultsWidget(QWidget):
             val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
             w_layout.addWidget(val_lbl, i, 1)
             self.weight_labels[key] = val_lbl
-        self.weight_labels["Add'l Water"].setVisible(False)  # Hide by default
+
+        # Hide soap-specific fields in candy mode
+        if self.mode == "candy":
+            self.weight_labels["Lye Weight"].setVisible(False)
+            w_layout.itemAtPosition(3, 0).widget().setVisible(False)
+        self.weight_labels["Add'l Water"].setVisible(False)
 
         self.weights_group.setLayout(w_layout)
         layout.addWidget(self.weights_group)
@@ -512,41 +624,42 @@ class CalculationResultsWidget(QWidget):
         layout.addWidget(self.yield_group)
 
         # Predicted Qualities
-        self.qualities_group = QGroupBox("Soap Bar Quality")
-        self.qualities_group.setToolTip(
-            "Theoretical qualities based on oil fatty acid profile.\nThese values do not change with Superfat/Lye Discount."
-        )
-        q_layout = QGridLayout()
+        if self.mode == "soap":
+            self.qualities_group = QGroupBox("Soap Bar Quality")
+            self.qualities_group.setToolTip(
+                "Theoretical qualities based on oil fatty acid profile.\nThese values do not change with Superfat/Lye Discount."
+            )
+            q_layout = QGridLayout()
 
-        # Headers
-        q_layout.addWidget(QLabel("<b>Quality</b>"), 0, 0)
-        q_layout.addWidget(QLabel("<b>Range</b>"), 0, 1)
-        q_layout.addWidget(QLabel("<b>Your Recipe</b>"), 0, 2)
+            # Headers
+            q_layout.addWidget(QLabel("<b>Quality</b>"), 0, 0)
+            q_layout.addWidget(QLabel("<b>Range</b>"), 0, 1)
+            q_layout.addWidget(QLabel("<b>Your Recipe</b>"), 0, 2)
 
-        self.quality_labels_display = {}
-        # SoapCalc Ranges
-        quality_data = [
-            ("Hardness", "29 - 54"),
-            ("Cleansing", "12 - 22"),
-            ("Conditioning", "44 - 69"),
-            ("Bubbly", "14 - 46"),
-            ("Creamy", "16 - 48"),
-            ("Iodine", "41 - 70"),
-            ("INS", "136 - 165"),
-        ]
+            self.quality_labels_display = {}
+            # SoapCalc Ranges
+            quality_data = [
+                ("Hardness", "29 - 54"),
+                ("Cleansing", "12 - 22"),
+                ("Conditioning", "44 - 69"),
+                ("Bubbly", "14 - 46"),
+                ("Creamy", "16 - 48"),
+                ("Iodine", "41 - 70"),
+                ("INS", "136 - 165"),
+            ]
 
-        for i, (key, range_val) in enumerate(quality_data):
-            row = i + 1
-            q_layout.addWidget(QLabel(key), row, 0)
-            q_layout.addWidget(QLabel(range_val), row, 1)
+            for i, (key, range_val) in enumerate(quality_data):
+                row = i + 1
+                q_layout.addWidget(QLabel(key), row, 0)
+                q_layout.addWidget(QLabel(range_val), row, 1)
 
-            val_lbl = QLabel("0.0")
-            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
-            q_layout.addWidget(val_lbl, row, 2)
-            self.quality_labels_display[key] = val_lbl
+                val_lbl = QLabel("0.0")
+                val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+                q_layout.addWidget(val_lbl, row, 2)
+                self.quality_labels_display[key] = val_lbl
 
-        self.qualities_group.setLayout(q_layout)
-        layout.addWidget(self.qualities_group)
+            self.qualities_group.setLayout(q_layout)
+            layout.addWidget(self.qualities_group)
 
         layout.addStretch()
         self.setLayout(layout)
@@ -569,6 +682,12 @@ class CalculationResultsWidget(QWidget):
             unit_system, "g"
         )
 
+        # Update main weight label for candy mode
+        if self.mode == "candy":
+            oil_weight_label = self.weights_group.layout().itemAtPosition(0, 0).widget()
+            if oil_weight_label:
+                oil_weight_label.setText("Total Ingredient Weight:")
+
         # Update recipe name if provided
         if recipe_name is not None:
             self.recipe_name_label.setText(
@@ -590,13 +709,14 @@ class CalculationResultsWidget(QWidget):
         if self.cost_manager and self.calculator:
             for name, weight in self.calculator.oils.items():
                 total_cost += weight * self.cost_manager.get_cost_per_gram(name)
-            for name, weight in self.calculator.additives.items():
-                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+            if self.mode == "soap":
+                for name, weight in self.calculator.additives.items():
+                    total_cost += weight * self.cost_manager.get_cost_per_gram(name)
 
-            # Add Lye Cost
-            lye_weight = properties.get("lye_weight", 0.0)
-            lye_type = self.calculator.lye_type
-            total_cost += lye_weight * self.cost_manager.get_cost_per_gram(lye_type)
+                # Add Lye Cost
+                lye_weight = properties.get("lye_weight", 0.0)
+                lye_type = self.calculator.lye_type
+                total_cost += lye_weight * self.cost_manager.get_cost_per_gram(lye_type)
 
         # Handle Master Batch Lye Logic
         display_lye_label = "Lye Weight"
@@ -605,7 +725,11 @@ class CalculationResultsWidget(QWidget):
         additional_water = 0.0
         show_additional = False
 
-        if self.mb_lye_enabled and self.mb_lye_concentration > 0:
+        if (
+            self.mode == "soap"
+            and self.mb_lye_enabled
+            and self.mb_lye_concentration > 0
+        ):
             # Calculate Solution Weight required to get the pure lye amount
             # Weight = Pure Lye / (Concentration %)
             solution_weight = properties["lye_weight"] / (
@@ -627,7 +751,9 @@ class CalculationResultsWidget(QWidget):
 
         # Calculate Total Weight including Additives (Fragrance, etc.)
         # properties['total_batch_weight'] usually contains just Oils + Water + Lye
-        additive_weight = sum(self.calculator.additives.values())
+        additive_weight = (
+            sum(self.calculator.additives.values()) if self.mode == "soap" else 0
+        )
         true_total_weight = properties["total_batch_weight"] + additive_weight
 
         # Batch Weights
@@ -643,18 +769,21 @@ class CalculationResultsWidget(QWidget):
 
         # Update Labels
         # Update Lye Label text dynamically
-        lye_lbl_widget = (
-            self.weights_group.layout().itemAtPosition(3, 0).widget()
-        )  # Row 3 is Lye
-        if lye_lbl_widget:
-            lye_lbl_widget.setText(f"{display_lye_label}:")
+        if self.mode == "soap":
+            lye_lbl_widget = (
+                self.weights_group.layout().itemAtPosition(3, 0).widget()
+            )  # Row 3 is Lye
+            if lye_lbl_widget:
+                lye_lbl_widget.setText(f"{display_lye_label}:")
 
-        # Toggle Additional Water visibility
-        self.weight_labels["Add'l Water"].setVisible(show_additional)
-        add_water_lbl_widget = self.weights_group.layout().itemAtPosition(2, 0).widget()
-        if add_water_lbl_widget:
-            add_water_lbl_widget.setVisible(show_additional)
-            add_water_lbl_widget.setText("Add'l Water:")
+            # Toggle Additional Water visibility
+            self.weight_labels["Add'l Water"].setVisible(show_additional)
+            add_water_lbl_widget = (
+                self.weights_group.layout().itemAtPosition(2, 0).widget()
+            )
+            if add_water_lbl_widget:
+                add_water_lbl_widget.setVisible(show_additional)
+                add_water_lbl_widget.setText("Add'l Water:")
 
         for key, val in weights_map.items():
             if key in self.weight_labels:
@@ -683,22 +812,25 @@ class CalculationResultsWidget(QWidget):
                 self.cost_per_bar_label.setText("$0.00")
 
         # Soap Qualities
-        qualities = properties.get("relative_qualities", {})
+        if self.mode == "soap":
+            qualities = properties.get("relative_qualities", {})
 
-        quality_map = {
-            "Hardness": qualities.get("hardness", 0),
-            "Cleansing": qualities.get("cleansing", 0),
-            "Conditioning": qualities.get("conditioning", 0),
-            "Bubbly": qualities.get("bubbly", 0),
-            "Creamy": qualities.get("creamy", 0),
-            "Iodine": qualities.get("iodine", 0),
-            "INS": qualities.get("ins", 0),
-        }
+            quality_map = {
+                "Hardness": qualities.get("hardness", 0),
+                "Cleansing": qualities.get("cleansing", 0),
+                "Conditioning": qualities.get("conditioning", 0),
+                "Bubbly": qualities.get("bubbly", 0),
+                "Creamy": qualities.get("creamy", 0),
+                "Iodine": qualities.get("iodine", 0),
+                "INS": qualities.get("ins", 0),
+            }
 
-        for key, val in quality_map.items():
-            if key in self.quality_labels_display:
-                # SoapCalc uses integers for qualities
-                self.quality_labels_display[key].setText(f"{int(round(float(val)))}")
+            for key, val in quality_map.items():
+                if key in self.quality_labels_display:
+                    # SoapCalc uses integers for qualities
+                    self.quality_labels_display[key].setText(
+                        f"{int(round(float(val)))}"
+                    )
 
 
 class FABreakdownWidget(QWidget):
@@ -1108,7 +1240,7 @@ class RecipeReportWidget(QWidget):
 
         self.setLayout(layout)
 
-    def refresh_report(self, recipe_name="Current Recipe", notes=""):
+    def refresh_report(self, recipe_name="Current Recipe", notes="", mb_config=None):
         """Generate HTML report"""
         props = self.calculator.get_batch_properties()
         unit = self.calculator.unit_system
@@ -1203,6 +1335,29 @@ class RecipeReportWidget(QWidget):
         additive_weight = sum(self.calculator.additives.values())
         true_total_weight = props["total_batch_weight"] + additive_weight
 
+        # --- Master Batch Logic ---
+        water_row_label = "Water"
+        water_val = props["water_weight"]
+        lye_row_label = "Lye"
+        lye_val = props["lye_weight"]
+        mb_note = ""
+
+        if mb_config and mb_config.get("enabled"):
+            conc = mb_config.get("concentration", 50.0)
+            if conc > 0:
+                # Calculate Solution Weight
+                solution_weight = props["lye_weight"] / (conc / 100.0)
+                water_in_solution = solution_weight - props["lye_weight"]
+                additional_water = props["water_weight"] - water_in_solution
+
+                lye_row_label = f"Lye Solution ({conc:g}%)"
+                lye_val = solution_weight
+
+                water_row_label = "Add'l Water"
+                water_val = additional_water
+
+                mb_note = f"<div style='font-size:10px; color:#666; margin-top:5px;'>* Master Batch: {props['lye_weight']:.1f}g Lye dissolved in {water_in_solution:.1f}g Water</div>"
+
         html += f"""
             <!-- Top Section: Parameters and Totals Side-by-Side -->
             <table style="border:none; width:100%; margin-top:0;">
@@ -1222,10 +1377,11 @@ class RecipeReportWidget(QWidget):
                 <div class="section-header" style="margin-top:0;">Liquids & Totals</div>
                 <table>
                     <tr><th class="left-align">Item</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
-                    <tr><td class="left-align">Water</td><td>{props['water_weight']/453.592:.2f}</td><td>{props['water_weight']/28.3495:.2f}</td><td>{props['water_weight']:.1f}</td></tr>
-                    <tr><td class="left-align">Lye</td><td>{props['lye_weight']/453.592:.2f}</td><td>{props['lye_weight']/28.3495:.2f}</td><td>{props['lye_weight']:.1f}</td></tr>
+                    <tr><td class="left-align">{water_row_label}</td><td>{water_val/453.592:.2f}</td><td>{water_val/28.3495:.2f}</td><td>{water_val:.1f}</td></tr>
+                    <tr><td class="left-align">{lye_row_label}</td><td>{lye_val/453.592:.2f}</td><td>{lye_val/28.3495:.2f}</td><td>{lye_val:.1f}</td></tr>
                     <tr style="font-weight:bold;"><td class="left-align">Total Batch</td><td>{true_total_weight/453.592:.2f}</td><td>{true_total_weight/28.3495:.2f}</td><td>{true_total_weight:.1f}</td></tr>
                 </table>
+                {mb_note}
             </td>
             </tr>
             </table>
@@ -1851,3 +2007,415 @@ class ProfitAnalysisWidget(QWidget):
             self.packaging_cost_spin.setValue(float(data.get("packaging", 0.50)))
             self.overhead_spin.setValue(float(data.get("overhead", 10.0)))
             self.profit_margin_spin.setValue(float(data.get("margin", 50.0)))
+
+
+class MoldVolumeWidget(QWidget):
+    """Widget to calculate mold volume and required batch size"""
+
+    weight_calculated = pyqtSignal(float)
+
+    def __init__(self, calculator: SoapCalculator):
+        super().__init__()
+        self.calculator = calculator
+        self.settings = QSettings("FireAndIceApothecary", "SoapCalc")
+        self.presets = [
+            ('10" Loaf (Standard)', 87.5, "10 x 3.5 x 2.5 inches"),
+            ("Tall Skinny Loaf", 87.5, "10 x 2.5 x 3.5 inches"),
+            ("12 Bar Slab", 160.0, "8 x 8 x 2.5 inches"),
+            ('6" Slab', 45.0, "6 x 6 x 1.25 inches"),
+            ("Round Column (PVC)", 60.0, '3" diam x 8.5" tall'),
+        ]
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout()
+
+        # Header
+        layout.addWidget(QLabel("<b>Mold Volume Calculator</b>"))
+        layout.addWidget(QLabel("Calculate the total oil weight needed for your mold."))
+
+        # Mode Selection
+        mode_group = QGroupBox("Mold Type")
+        mode_layout = QHBoxLayout()
+        self.mode_std = QRadioButton("Standard / Preset")
+        self.mode_custom = QRadioButton("Custom Dimensions")
+        self.mode_water = QRadioButton("Water Capacity")
+        self.mode_std.setChecked(True)
+
+        self.mode_std.toggled.connect(self.toggle_mode)
+        self.mode_custom.toggled.connect(self.toggle_mode)
+        self.mode_water.toggled.connect(self.toggle_mode)
+
+        mode_layout.addWidget(self.mode_std)
+        mode_layout.addWidget(self.mode_custom)
+        mode_layout.addWidget(self.mode_water)
+        mode_group.setLayout(mode_layout)
+        layout.addWidget(mode_group)
+
+        # Stack for inputs
+        self.stack = QStackedWidget()
+
+        # Page 1: Standard Molds
+        page_std = QWidget()
+        std_layout = QFormLayout()
+        self.std_combo = QComboBox()
+        self.load_presets()
+
+        std_layout.addRow("Select Mold:", self.std_combo)
+
+        del_preset_btn = QPushButton("Delete Preset")
+        del_preset_btn.setToolTip("Delete selected custom preset")
+        del_preset_btn.clicked.connect(self.delete_preset)
+        std_layout.addRow("", del_preset_btn)
+
+        page_std.setLayout(std_layout)
+        self.stack.addWidget(page_std)
+
+        # Page 2: Custom Dimensions
+        page_custom = QWidget()
+        custom_layout = QFormLayout()
+
+        self.shape_combo = QComboBox()
+        self.shape_combo.addItems(["Rectangular (Box)", "Cylindrical (Round)"])
+        self.shape_combo.currentTextChanged.connect(self.toggle_shape_inputs)
+        custom_layout.addRow("Shape:", self.shape_combo)
+
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(["Inches", "Centimeters"])
+        custom_layout.addRow("Dimensions Unit:", self.unit_combo)
+
+        # Box Inputs
+        self.box_widget = QWidget()
+        box_l = QHBoxLayout(self.box_widget)
+        box_l.setContentsMargins(0, 0, 0, 0)
+        self.len_spin = SelectAllSpinBox()
+        self.len_spin.setRange(0, 100)
+        self.wid_spin = SelectAllSpinBox()
+        self.wid_spin.setRange(0, 100)
+        self.hgt_spin = SelectAllSpinBox()
+        self.hgt_spin.setRange(0, 100)
+        box_l.addWidget(QLabel("L:"))
+        box_l.addWidget(self.len_spin)
+        box_l.addWidget(QLabel("W:"))
+        box_l.addWidget(self.wid_spin)
+        box_l.addWidget(QLabel("H:"))
+        box_l.addWidget(self.hgt_spin)
+        custom_layout.addRow("Dimensions:", self.box_widget)
+        box_lbl = QLabel("Inner Dimensions:")
+        box_lbl.setToolTip(
+            "Enter the INSIDE dimensions of the mold cavity.\nProduct listings often show external packaging dimensions."
+        )
+        custom_layout.addRow(box_lbl, self.box_widget)
+
+        # Cylinder Inputs
+        self.cyl_widget = QWidget()
+        cyl_l = QHBoxLayout(self.cyl_widget)
+        cyl_l.setContentsMargins(0, 0, 0, 0)
+        self.diam_spin = SelectAllSpinBox()
+        self.diam_spin.setRange(0, 100)
+        self.cyl_hgt_spin = SelectAllSpinBox()
+        self.cyl_hgt_spin.setRange(0, 100)
+        cyl_l.addWidget(QLabel("Diameter:"))
+        cyl_l.addWidget(self.diam_spin)
+        cyl_l.addWidget(QLabel("Height:"))
+        cyl_l.addWidget(self.cyl_hgt_spin)
+        custom_layout.addRow("Dimensions:", self.cyl_widget)
+        cyl_lbl = QLabel("Inner Dimensions:")
+        cyl_lbl.setToolTip("Enter the INSIDE dimensions of the mold cavity.")
+        custom_layout.addRow(cyl_lbl, self.cyl_widget)
+        self.cyl_widget.setVisible(False)
+
+        save_preset_btn = QPushButton("Save as Preset")
+        save_preset_btn.clicked.connect(self.save_preset)
+        custom_layout.addRow("", save_preset_btn)
+
+        page_custom.setLayout(custom_layout)
+        self.stack.addWidget(page_custom)
+
+        # Page 3: Water Capacity
+        page_water = QWidget()
+        water_layout = QFormLayout()
+
+        self.water_weight_spin = SelectAllSpinBox()
+        self.water_weight_spin.setRange(0, 10000)
+        self.water_weight_spin.setValue(0)
+        self.water_unit_combo = QComboBox()
+        self.water_unit_combo.addItems(["oz", "g"])
+
+        w_input = QWidget()
+        w_input_l = QHBoxLayout(w_input)
+        w_input_l.setContentsMargins(0, 0, 0, 0)
+        w_input_l.addWidget(self.water_weight_spin)
+        w_input_l.addWidget(self.water_unit_combo)
+        water_layout.addRow("Water Weight:", w_input)
+
+        self.water_per_cavity_check = QCheckBox("Weight is per cavity")
+        self.water_per_cavity_check.setToolTip(
+            "Check this if you weighed one cavity but want to make a batch for the total count below."
+        )
+        water_layout.addRow("", self.water_per_cavity_check)
+
+        water_layout.addRow(
+            QLabel(
+                "<small><i>Tip: Place mold on scale, tare, and fill with water to get exact capacity.</i></small>"
+            )
+        )
+
+        page_water.setLayout(water_layout)
+        self.stack.addWidget(page_water)
+
+        layout.addWidget(self.stack)
+
+        # Cavity/Mold Count
+        count_layout = QHBoxLayout()
+        count_layout.addWidget(QLabel("Number of Cavities / Molds:"))
+        self.count_spin = QSpinBox()
+        self.count_spin.setRange(1, 100)
+        self.count_spin.setValue(1)
+        count_layout.addWidget(self.count_spin)
+        count_layout.addStretch()
+        layout.addLayout(count_layout)
+
+        # Calculation Factors
+        factors_group = QGroupBox("Calculation Settings")
+        f_layout = QFormLayout()
+
+        self.density_spin = QDoubleSpinBox()
+        self.density_spin.setRange(0.1, 2.0)
+        self.density_spin.setSingleStep(0.01)
+        self.density_spin.setValue(0.51)  # Default density for soap batter
+        self.density_spin.setToolTip(
+            "Density of soap batter.\nWater is ~0.58 oz/in³. Soap is often ~0.60 oz/in³."
+        )
+        f_layout.addRow("Batter Density (oz/in³):", self.density_spin)
+
+        self.oil_pct_spin = QDoubleSpinBox()
+        self.oil_pct_spin.setRange(1, 100)
+        self.oil_pct_spin.setValue(70.0)
+        self.oil_pct_spin.setSuffix("%")
+        self.oil_pct_spin.setToolTip(
+            "Percentage of the total batch that is oils.\nTypically 65-70%."
+        )
+        f_layout.addRow("Oil % of Batch:", self.oil_pct_spin)
+
+        factors_group.setLayout(f_layout)
+        layout.addWidget(factors_group)
+
+        # Results
+        res_layout = QGridLayout()
+        res_layout.addWidget(QLabel("Calculated Volume:"), 0, 0)
+        self.vol_lbl = QLabel("0.00")
+        res_layout.addWidget(self.vol_lbl, 0, 1)
+
+        res_layout.addWidget(QLabel("Water Capacity (Est):"), 1, 0)
+        self.water_capacity_lbl = QLabel("0.00 g")
+        self.water_capacity_lbl.setToolTip(
+            "Estimated weight if filled with water (Density ~0.578 oz/in³)"
+        )
+        res_layout.addWidget(self.water_capacity_lbl, 1, 1)
+
+        res_layout.addWidget(QLabel("Total Batter Needed:"), 2, 0)
+        self.total_weight_lbl = QLabel("0.00 g")
+        self.total_weight_lbl.setStyleSheet(
+            "font-weight: bold; font-size: 14px; color: #4caf50;"
+        )
+        res_layout.addWidget(self.total_weight_lbl, 2, 1)
+
+        res_layout.addWidget(QLabel("Required Oil Weight:"), 3, 0)
+        self.weight_lbl = QLabel("0.00 g")
+        self.weight_lbl.setToolTip(
+            "The amount of oils to enter in your recipe to achieve the total batter weight."
+        )
+        res_layout.addWidget(self.weight_lbl, 3, 1)
+
+        layout.addLayout(res_layout)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        calc_btn = QPushButton("Calculate")
+        calc_btn.clicked.connect(self.calculate)
+        btn_layout.addWidget(calc_btn)
+
+        apply_btn = QPushButton("Set as Recipe Target")
+        apply_btn.clicked.connect(self.apply_target)
+        btn_layout.addWidget(apply_btn)
+
+        layout.addLayout(btn_layout)
+        layout.addStretch()
+        self.setLayout(layout)
+
+    def load_presets(self):
+        """Load standard and custom presets into combo box"""
+        self.std_combo.clear()
+        # Standard Presets
+        for name, vol, desc in self.presets:
+            self.std_combo.addItem(f"{name} ({desc})", vol)
+
+        # Custom Presets from Settings
+        customs = self.settings.value("custom_molds", {})
+        for name, data in customs.items():
+            vol = float(data.get("volume", 0))
+            desc = data.get("desc", "")
+            self.std_combo.addItem(f"{name} ({desc})", vol)
+            # Mark as custom using UserRole
+            idx = self.std_combo.count() - 1
+            self.std_combo.setItemData(idx, name, Qt.ItemDataRole.UserRole + 1)
+
+    def save_preset(self):
+        """Save current custom dimensions as a preset"""
+        unit = self.unit_combo.currentText()
+        is_inch = unit == "Inches"
+        shape = self.shape_combo.currentText()
+
+        vol_raw = 0.0
+        desc = ""
+
+        if shape == "Rectangular (Box)":
+            l = self.len_spin.value()
+            w = self.wid_spin.value()
+            h = self.hgt_spin.value()
+            vol_raw = l * w * h
+            unit_str = "in" if is_inch else "cm"
+            desc = f"{l} x {w} x {h} {unit_str}"
+        else:
+            d = self.diam_spin.value()
+            h = self.cyl_hgt_spin.value()
+            r = d / 2.0
+            vol_raw = math.pi * (r**2) * h
+            unit_str = "in" if is_inch else "cm"
+            desc = f"{d} diam x {h} {unit_str}"
+
+        if vol_raw <= 0:
+            QMessageBox.warning(self, "Error", "Dimensions must be greater than 0.")
+            return
+
+        volume_in3 = vol_raw if is_inch else (vol_raw * 0.0610237)
+
+        name, ok = QInputDialog.getText(self, "Save Preset", "Preset Name:")
+        if ok and name:
+            customs = self.settings.value("custom_molds", {})
+            customs[name] = {"volume": volume_in3, "desc": desc}
+            self.settings.setValue("custom_molds", customs)
+            self.load_presets()
+
+            # Select the new item
+            for i in range(self.std_combo.count()):
+                key = self.std_combo.itemData(i, Qt.ItemDataRole.UserRole + 1)
+                if key == name:
+                    self.std_combo.setCurrentIndex(i)
+                    break
+            QMessageBox.information(self, "Saved", f"Preset '{name}' saved.")
+
+    def delete_preset(self):
+        """Delete selected custom preset"""
+        idx = self.std_combo.currentIndex()
+        if idx < 0:
+            return
+        key = self.std_combo.itemData(idx, Qt.ItemDataRole.UserRole + 1)
+        if not key:
+            QMessageBox.information(self, "Info", "Cannot delete standard presets.")
+            return
+        customs = self.settings.value("custom_molds", {})
+        if key in customs:
+            del customs[key]
+            self.settings.setValue("custom_molds", customs)
+            self.load_presets()
+
+    def toggle_mode(self):
+        if self.mode_std.isChecked():
+            self.stack.setCurrentIndex(0)
+        elif self.mode_custom.isChecked():
+            self.stack.setCurrentIndex(1)
+        else:
+            self.stack.setCurrentIndex(2)
+
+    def toggle_shape_inputs(self, text):
+        if text == "Rectangular (Box)":
+            self.box_widget.setVisible(True)
+            self.cyl_widget.setVisible(False)
+        else:
+            self.box_widget.setVisible(False)
+            self.cyl_widget.setVisible(True)
+
+    def calculate(self):
+        volume_in3 = 0.0
+
+        if self.mode_std.isChecked():
+            # Standard
+            volume_in3 = self.std_combo.currentData()
+            # Apply Count
+            count = self.count_spin.value()
+            volume_in3 *= count
+        elif self.mode_custom.isChecked():
+            # Custom
+            unit = self.unit_combo.currentText()
+            is_inch = unit == "Inches"
+
+            if self.shape_combo.currentText() == "Rectangular (Box)":
+                l = self.len_spin.value()
+                w = self.wid_spin.value()
+                h = self.hgt_spin.value()
+                vol = l * w * h
+            else:
+                d = self.diam_spin.value()
+                h = self.cyl_hgt_spin.value()
+                r = d / 2.0
+                vol = math.pi * (r**2) * h
+
+            if is_inch:
+                volume_in3 = vol
+            else:
+                # cm3 to in3
+                volume_in3 = vol * 0.0610237
+
+            # Apply Count
+            count = self.count_spin.value()
+            volume_in3 *= count
+        else:
+            # Water Capacity Mode
+            w_val = self.water_weight_spin.value()
+            w_unit = self.water_unit_combo.currentText()
+
+            # Convert to grams
+            w_grams = w_val * 28.3495 if w_unit == "oz" else w_val
+
+            # Convert water grams to volume (in3)
+            # Water density approx 1 g/cm3 = 16.387 g/in3
+            volume_in3 = w_grams / 16.387
+
+            if self.water_per_cavity_check.isChecked():
+                count = self.count_spin.value()
+                volume_in3 *= count
+
+        # Calculate Water Capacity for reference (Density ~0.578 oz/in³)
+        water_weight_oz = volume_in3 * 0.578036
+        water_weight_g = water_weight_oz * 28.3495
+        self.water_capacity_lbl.setText(
+            f"{water_weight_g:.1f} g ({water_weight_oz:.2f} oz)"
+        )
+
+        # Calculate Total Batter Weight
+        # Density is oz batter per cubic inch
+        density = self.density_spin.value()
+        total_weight_oz = volume_in3 * density
+        total_weight_g = total_weight_oz * 28.3495
+
+        # Calculate Oil Weight based on percentage
+        oil_pct = self.oil_pct_spin.value() / 100.0
+        oil_weight_oz = total_weight_oz * oil_pct
+        oil_weight_g = oil_weight_oz * 28.3495
+
+        self.last_calculated_grams = oil_weight_g
+
+        self.vol_lbl.setText(f"{volume_in3:.2f} in³")
+
+        # Display results
+        self.total_weight_lbl.setText(
+            f"{total_weight_g:.1f} g ({total_weight_oz:.2f} oz)"
+        )
+        self.weight_lbl.setText(f"{oil_weight_g:.1f} g ({oil_weight_oz:.2f} oz)")
+
+    def apply_target(self):
+        self.calculate()
+        if hasattr(self, "last_calculated_grams") and self.last_calculated_grams > 0:
+            self.weight_calculated.emit(self.last_calculated_grams)

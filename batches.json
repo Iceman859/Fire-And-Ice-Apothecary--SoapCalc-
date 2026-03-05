@@ -1,5 +1,166 @@
 [
     {
+        "id": "a3ef8a99-8030-4813-a773-a0611fe738a1",
+        "lot_number": "20260301-E1A5",
+        "recipe_name": "Baby Buttermilk Carrot Bar",
+        "date_made": "2026-03-01",
+        "cure_date": "2026-03-29",
+        "status": "Curing",
+        "total_weight": 1497.43,
+        "recipe_snapshot": {
+            "oils": {
+                "Olive Oil": 510.291,
+                "Coconut Oil": 255.1455,
+                "Avocado Oil": 153.0873,
+                "Castor Oil": 51.0291,
+                "Shea Butter": 51.0291
+            },
+            "superfat_percent": 6.0,
+            "water_to_lye_ratio": 2.0,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "percent",
+            "water_percent": 33.0,
+            "lye_concentration": 34.0,
+            "properties": {
+                "total_oil_weight": 1020.58,
+                "lye_weight": 140.06,
+                "water_weight": 336.79,
+                "total_batch_weight": 1497.43,
+                "lye_percentage": 13.72,
+                "water_percentage": 33.0,
+                "fa_breakdown": {
+                    "lauric": 12.0,
+                    "myristic": 4.75,
+                    "palmitic": 12.5,
+                    "stearic": 4.55,
+                    "oleic": 47.8,
+                    "linoleic": 8.8,
+                    "linolenic": 0.5,
+                    "ricinoleic": 4.5
+                },
+                "relative_qualities": {
+                    "hardness": 33.8,
+                    "cleansing": 16.75,
+                    "bubbly": 21.25,
+                    "creamy": 21.55,
+                    "conditioning": 61.6,
+                    "iodine": 65.14999999999999,
+                    "ins": 142.4
+                }
+            },
+            "name": "Baby Buttermilk Carrot Bar"
+        },
+        "notes": "[2026-03-01 15:16]  In Mold\n\n[2026-03-02 17:23]  Unmolded And Cut"
+    },
+    {
+        "id": "3ad35753-67a4-4a35-bfef-4d6ce75ba5ee",
+        "lot_number": "20260301-DA72",
+        "recipe_name": "Goat Milk Tallow - Unscented 3/1/26",
+        "date_made": "2026-03-01",
+        "cure_date": "2026-03-29",
+        "status": "Curing",
+        "total_weight": 1160.87,
+        "recipe_snapshot": {
+            "oils": {
+                "Olive Oil": 368.5435,
+                "Coconut Oil": 164.4271,
+                "Castor Oil": 65.20384999999999,
+                "Tallow Beef": 311.8445
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 2.0,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "ratio",
+            "water_percent": 30.0,
+            "lye_concentration": 34.0,
+            "properties": {
+                "total_oil_weight": 910.02,
+                "lye_weight": 126.14,
+                "water_weight": 124.71,
+                "total_batch_weight": 1160.87,
+                "lye_percentage": 13.86,
+                "water_percentage": 13.7,
+                "fa_breakdown": {
+                    "lauric": 9.36,
+                    "myristic": 5.49,
+                    "palmitic": 16.89,
+                    "stearic": 9.3,
+                    "oleic": 42.01,
+                    "linoleic": 6.54,
+                    "linolenic": 0.75,
+                    "ricinoleic": 6.45
+                },
+                "relative_qualities": {
+                    "hardness": 41.03426791277259,
+                    "cleansing": 14.84735202492212,
+                    "bubbly": 21.295950155763244,
+                    "creamy": 32.635514018691595,
+                    "conditioning": 55.74454828660437,
+                    "iodine": 57.81308411214954,
+                    "ins": 146.3208722741433
+                }
+            },
+            "name": "Goat Milk Tallow - Unscented 3/1/26"
+        },
+        "notes": "[2026-03-01 14:38] In Mold\n\n[2026-03-02 17:24]  Unmolded And Cut"
+    },
+    {
+        "id": "ff1fa146-323d-4d8c-b52e-b9cd3b9114fd",
+        "lot_number": "20260217-657B",
+        "recipe_name": "Unscented Goat Milk Oatmeal",
+        "date_made": "2026-02-17",
+        "cure_date": "2026-03-17",
+        "status": "Curing",
+        "total_weight": 1296.91,
+        "recipe_snapshot": {
+            "oils": {
+                "Castor Oil": 54.431039999999996,
+                "Shea Butter": 45.3592,
+                "Olive Oil": 127.00576000000001,
+                "Coconut Oil": 226.796,
+                "Lard, Pig Tallow (Manteca)": 453.592
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 5,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "concentration",
+            "water_percent": 25.0,
+            "lye_concentration": 33.0,
+            "properties": {
+                "total_oil_weight": 907.18,
+                "lye_weight": 128.61,
+                "water_weight": 261.12,
+                "total_batch_weight": 1296.91,
+                "lye_percentage": 14.18,
+                "water_percentage": 28.78,
+                "fa_breakdown": {
+                    "lauric": 12.0,
+                    "myristic": 5.25,
+                    "palmitic": 18.46,
+                    "stearic": 9.67,
+                    "oleic": 37.3,
+                    "linoleic": 5.72,
+                    "linolenic": 0.14,
+                    "ricinoleic": 5.4
+                },
+                "relative_qualities": {
+                    "hardness": 45.38,
+                    "cleansing": 17.25,
+                    "bubbly": 22.65,
+                    "creamy": 33.53,
+                    "conditioning": 48.56,
+                    "iodine": 51.01,
+                    "ins": 160.2
+                }
+            },
+            "name": "Unscented Goat Milk Oatmeal"
+        },
+        "notes": "[2026-02-17 17:54] Finished Mold, placed in freezer\n[2026-02-17 17:55] when we mixed the lye and oil the temps were:\nOil: 95F\nLye: 105F\n\n\n[2026-02-18 18:10] Cut Soap into bars, smells funny"
+    },
+    {
         "id": "c26f2986-cdd1-4e48-98be-c2f857665d89",
         "lot_number": "20260215-97FE",
         "recipe_name": "Love Spell",
@@ -50,6 +211,6 @@
             },
             "name": "Love Spell"
         },
-        "notes": "[2026-02-15 19:09]  - Poured Mixture into mold"
+        "notes": "[2026-02-15 19:09]  - Poured Mixture into mold\n[2026-02-16 19:01]  - average of 5.0oz bars - 8 bars\n"
     }
 ]

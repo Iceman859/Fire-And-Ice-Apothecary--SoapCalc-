@@ -23,7 +23,9 @@ from PyQt6.QtWidgets import (
 )
 
 from src.data import get_all_oil_names
+from src.ui.candy_ingredients import get_all_candy_ingredient_names
 from src.models import Recipe, RecipeManager, SoapCalculator
+from src.models.candy_calculator import CandyCalculator
 from src.models.batch_manager import BatchManager
 from src.models.cost_manager import CostManager
 from .batch_history import BatchHistoryWidget
@@ -39,6 +41,7 @@ from .widgets import (
     RecipeParametersWidget,
     RecipeReportWidget,
     SettingsWidget,
+    MoldVolumeWidget,
 )
 from .master_batch import MasterBatchWidget
 
@@ -46,14 +49,17 @@ from .master_batch import MasterBatchWidget
 class MainWindow(QMainWindow):
     """Main application window"""
 
-    def __init__(self):
+    def __init__(
+        self, calculator=None, app_title="Fire & Ice Apothecary - Soap Calculator"
+    ):
         super().__init__()
-        self.setWindowTitle("Fire & Ice Apothecary")
+        self.setWindowTitle(app_title)
         self.setGeometry(100, 100, 1400, 900)
         self.showMaximized()
 
-        # Initialize calculator and recipe manager
-        self.calculator = SoapCalculator()
+        # Use provided calculator or default to SoapCalculator
+        self.calculator = calculator if calculator is not None else SoapCalculator()
+        self.is_candy_mode = isinstance(self.calculator, CandyCalculator)
         self.recipe_manager = RecipeManager("recipes")
         self.cost_manager = CostManager()
         self.batch_manager = BatchManager()
@@ -205,9 +211,14 @@ class MainWindow(QMainWindow):
         self.mb_tab = self.create_mb_tab()
         tabs.addTab(self.mb_tab, "Master Batching")
 
+        # Mold Volume Tab
+        self.mold_tab = self.create_mold_tab()
+        tabs.addTab(self.mold_tab, "Mold Volume")
+
         # FA Breakdown Tab
-        fa_tab = self.create_fa_tab()
-        tabs.addTab(fa_tab, "Fatty Acid Breakdown")
+        if not self.is_candy_mode:
+            fa_tab = self.create_fa_tab()
+            tabs.addTab(fa_tab, "Fatty Acid Breakdown")
 
         # Notes Tab
         self.notes_tab = self.create_notes_tab()
@@ -254,13 +265,21 @@ class MainWindow(QMainWindow):
         col1_layout = QVBoxLayout(col1_content)
         col1_layout.setContentsMargins(5, 5, 5, 5)
 
-        col1_layout.addWidget(QLabel("Recipe Parameters:"))
-        self.recipe_settings = RecipeParametersWidget(self.calculator)
-        col1_layout.addWidget(self.recipe_settings)
+        # Only show soap-specific widgets in soap mode
+        if not self.is_candy_mode:
+            col1_layout.addWidget(QLabel("Recipe Parameters:"))
+            self.recipe_settings = RecipeParametersWidget(self.calculator)
+            col1_layout.addWidget(self.recipe_settings)
 
-        col1_layout.addWidget(QLabel("Fragrance:"))
-        self.fragrance_widget = FragranceWidget(self.calculator, self.cost_manager)
-        col1_layout.addWidget(self.fragrance_widget)
+            col1_layout.addWidget(QLabel("Fragrance:"))
+            self.fragrance_widget = FragranceWidget(self.calculator, self.cost_manager)
+            col1_layout.addWidget(self.fragrance_widget)
+
+            # Additives Input (Moved to Column 1 for better grouping)
+            self.additive_widget = AdditiveInputWidget(
+                self.calculator, self.cost_manager
+            )
+            col1_layout.addWidget(self.additive_widget)
 
         col1_layout.addStretch()
 
@@ -275,7 +294,18 @@ class MainWindow(QMainWindow):
         col2_layout.setContentsMargins(5, 5, 5, 5)
 
         # Oil Input Area
-        self.oil_input_widget = OilInputWidget(self.calculator)
+        # In candy mode, this is just a generic ingredient input
+        if self.is_candy_mode:
+            col2_layout.addWidget(QLabel("Ingredients:"))
+            ingredient_names = get_all_candy_ingredient_names()
+        else:
+            col2_layout.addWidget(QLabel("Oils:"))
+            ingredient_names = get_all_oil_names()
+        self.oil_input_widget = OilInputWidget(
+            self.calculator,
+            "candy" if self.is_candy_mode else "soap",
+            ingredient_names,
+        )
         col2_layout.addWidget(self.oil_input_widget)
 
         # Table for oils in recipe
@@ -300,25 +330,24 @@ class MainWindow(QMainWindow):
         col2_layout.addWidget(manage_ing_btn)
 
         # Additives Input Area
-        self.additive_widget = AdditiveInputWidget(self.calculator)
-        col2_layout.addWidget(self.additive_widget)
-
-        # Additives table (editable) - shown below oil input
-        self.additives_table = QTableWidget()
-        self.additives_table.setColumnCount(4)
-        unit_abbr = self.calculator.get_unit_abbreviation()
-        self.additives_table.setHorizontalHeaderLabels(
-            ["Additive", f"Amount ({unit_abbr})", "Water Replacement", "Cost"]
-        )
-        self.additives_table.setColumnWidth(0, 180)
-        self.additives_table.setColumnWidth(1, 90)
-        self.additives_table.setColumnWidth(2, 100)
-        self.additives_table.setColumnWidth(3, 70)
-        col2_layout.addWidget(self.additives_table)
-        self.additives_table.cellChanged.connect(self.on_additive_cell_changed)
-        remove_add_btn = QPushButton("Remove Selected Additive")
-        remove_add_btn.clicked.connect(self.remove_selected_additive)
-        col2_layout.addWidget(remove_add_btn)
+        # Hide for candy mode since oils/ingredients are the same thing
+        if not self.is_candy_mode:
+            # Additives table (editable) - shown below oil input (Input widget moved to Col 1)
+            self.additives_table = QTableWidget()
+            self.additives_table.setColumnCount(4)
+            unit_abbr = self.calculator.get_unit_abbreviation()
+            self.additives_table.setHorizontalHeaderLabels(
+                ["Additive", f"Amount ({unit_abbr})", "Water Replacement", "Cost"]
+            )
+            self.additives_table.setColumnWidth(0, 180)
+            self.additives_table.setColumnWidth(1, 90)
+            self.additives_table.setColumnWidth(2, 100)
+            self.additives_table.setColumnWidth(3, 70)
+            col2_layout.addWidget(self.additives_table)
+            self.additives_table.cellChanged.connect(self.on_additive_cell_changed)
+            remove_add_btn = QPushButton("Remove Selected Additive")
+            remove_add_btn.clicked.connect(self.remove_selected_additive)
+            col2_layout.addWidget(remove_add_btn)
 
         # --- Column 3: Results & Operations (Right) ---
         col3_content = QWidget()
@@ -327,14 +356,21 @@ class MainWindow(QMainWindow):
 
         col3_layout.addWidget(QLabel("Calculation Results:"))
         self.results_widget = CalculationResultsWidget(
-            self.calculator, self.cost_manager
+            self.calculator,
+            self.cost_manager,
+            "candy" if self.is_candy_mode else "soap",
         )
         col3_layout.addWidget(self.results_widget)
 
         # Scaling controls
         col3_layout.addWidget(QLabel("Scale Recipe:"))
         scale_layout = QHBoxLayout()
-        self.scale_label = QLabel("Total Oil Weight (g):")
+        scale_label_text = (
+            "Total Ingredient Weight (g):"
+            if self.is_candy_mode
+            else "Total Oil Weight (g):"
+        )
+        self.scale_label = QLabel(scale_label_text)
         scale_layout.addWidget(self.scale_label)
         self.scale_spinbox = QDoubleSpinBox()
         self.scale_spinbox.setRange(0, 10000)
@@ -410,6 +446,15 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
 
+    def create_mold_tab(self):
+        """Create the mold volume calculator tab"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        self.mold_widget = MoldVolumeWidget(self.calculator)
+        layout.addWidget(self.mold_widget)
+        tab.setLayout(layout)
+        return tab
+
     def create_fa_tab(self):
         """Create the fatty-acid breakdown tab"""
         tab = QWidget()
@@ -468,52 +513,57 @@ class MainWindow(QMainWindow):
 
     def connect_signals(self):
         """Connect widget signals to slots"""
-        # Sync settings to calculator first
+        # Common signals
+        self.oil_input_widget.oil_added.connect(self.update_oils_table)
+        self.oil_input_widget.oil_added.connect(self.update_results)
+        self.inventory_widget.costs_changed.connect(self.update_results)
+        self.mold_widget.weight_calculated.connect(self.on_mold_weight_calculated)
+
+        # Settings signals
         self.settings_widget.settings_changed.connect(self.sync_settings_to_calculator)
         self.settings_widget.settings_changed.connect(self.update_input_units)
         self.settings_widget.settings_changed.connect(self.update_theme_from_settings)
-        # Sync recipe parameters
-        self.recipe_settings.parameters_changed.connect(self.update_results)
-        self.recipe_settings.parameters_changed.connect(self.save_preferences)
-
-        # Connect Master Batch Lye settings to Results Widget
-        self.recipe_settings.master_batch_changed.connect(
-            self.results_widget.set_master_batch_mode
-        )
-
-        self.oil_input_widget.oil_added.connect(self.update_oils_table)
-        self.oil_input_widget.oil_added.connect(self.update_results)
         self.settings_widget.settings_changed.connect(self.update_results)
         self.settings_widget.settings_changed.connect(self.update_scale_label)
-        # Persist preferences whenever settings change
         self.settings_widget.settings_changed.connect(self.save_preferences)
-        self.additive_widget.additive_added.connect(self.update_additives_table)
-        self.additive_widget.additive_added.connect(self.update_results)
-        # ensure tables update when settings change (units etc.)
         self.settings_widget.settings_changed.connect(self.update_oils_table)
-        self.settings_widget.settings_changed.connect(self.update_additives_table)
 
-        # Fragrance connections
-        self.fragrance_widget.fragrance_added.connect(self.update_additives_table)
-        self.fragrance_widget.fragrance_added.connect(self.update_results)
-
-        # Inventory connections
-        self.inventory_widget.costs_changed.connect(self.update_results)
-        self.inventory_widget.costs_changed.connect(
-            self.fragrance_widget.refresh_ingredients
-        )
+        # Soap-only signals
+        if not self.is_candy_mode:
+            self.recipe_settings.parameters_changed.connect(self.update_results)
+            self.recipe_settings.parameters_changed.connect(self.save_preferences)
+            self.recipe_settings.master_batch_changed.connect(
+                self.results_widget.set_master_batch_mode
+            )
+            self.additive_widget.additive_added.connect(self.update_additives_table)
+            self.additive_widget.additive_added.connect(self.update_results)
+            self.settings_widget.settings_changed.connect(self.update_additives_table)
+            self.fragrance_widget.fragrance_added.connect(self.update_additives_table)
+            self.fragrance_widget.fragrance_added.connect(self.update_results)
+            self.inventory_widget.costs_changed.connect(
+                self.fragrance_widget.refresh_ingredients
+            )
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
         # If switching to Print tab (index check or widget check)
         if self.tabs.widget(index) == self.print_tab:
             notes = self.notes_widget.get_notes()
+
+            # Gather Master Batch settings
+            mb_config = {}
+            if not self.is_candy_mode:
+                mb_config = {
+                    "enabled": self.recipe_settings.mb_check.isChecked(),
+                    "concentration": self.recipe_settings.mb_conc_spin.value(),
+                }
+
             self.report_widget.refresh_report(
-                self.current_recipe.name or "Unsaved Recipe", notes
+                self.current_recipe.name or "Unsaved Recipe", notes, mb_config
             )
         # Refresh fragrance list when switching to recipe tab (in case inventory changed)
         if index == 0:  # Recipe Tab
-            if hasattr(self, "fragrance_widget"):
+            if not self.is_candy_mode and hasattr(self, "fragrance_widget"):
                 self.fragrance_widget.refresh_ingredients()
             # Refresh oils in case a master batch was created
             if hasattr(self, "oil_input_widget"):
@@ -548,8 +598,10 @@ class MainWindow(QMainWindow):
     def update_input_units(self):
         """Update input widgets with new unit system"""
         unit = self.calculator.unit_system
-        self.oil_input_widget.set_unit_system(unit)
-        self.additive_widget.set_unit_system(unit)
+        if hasattr(self, "oil_input_widget"):
+            self.oil_input_widget.set_unit_system(unit)
+        if not self.is_candy_mode and hasattr(self, "additive_widget"):
+            self.additive_widget.set_unit_system(unit)
 
     def update_additives_table(self):
         """Update additives table (simple display)"""
@@ -557,6 +609,9 @@ class MainWindow(QMainWindow):
         total_oil = self.calculator.get_total_oil_weight()
         rows = len(additives)
         # suppress signals while updating
+        if not hasattr(self, "additives_table"):
+            return
+
         self._suppress_additives_table_signals = True
         # update header to reflect current unit
         unit_abbr = self.calculator.get_unit_abbreviation()
@@ -627,6 +682,24 @@ class MainWindow(QMainWindow):
             pct_item = QTableWidgetItem(f"{percentage:.2f}")
             cost_item = QTableWidgetItem(f"${cost:.2f}")
 
+            # Set flags to ensure editable/read-only behavior
+            name_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsSelectable
+                | Qt.ItemFlag.ItemIsEditable
+            )
+            weight_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsSelectable
+                | Qt.ItemFlag.ItemIsEditable
+            )
+            pct_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsSelectable
+                | Qt.ItemFlag.ItemIsEditable
+            )
+            cost_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+
             self.oils_table.setItem(row, 0, name_item)
             self.oils_table.setItem(row, 1, weight_item)
             self.oils_table.setItem(row, 2, pct_item)
@@ -643,16 +716,22 @@ class MainWindow(QMainWindow):
     def update_oils_table_headers(self):
         """Update table headers with current unit"""
         unit_abbr = self.calculator.get_unit_abbreviation()
-        self.oils_table.setHorizontalHeaderLabels(
-            ["Oil Name", f"Weight ({unit_abbr})", "% of Oils", "Cost"]
-        )
+        if self.is_candy_mode:
+            self.oils_table.setHorizontalHeaderLabels(
+                ["Ingredient", f"Weight ({unit_abbr})", "% of Total", "Cost"]
+            )
+        else:
+            self.oils_table.setHorizontalHeaderLabels(
+                ["Oil Name", f"Weight ({unit_abbr})", "% of Oils", "Cost"]
+            )
 
     # --- Logic & Calculations ---
 
     def update_scale_label(self):
         """Update scale label with current unit"""
         unit_abbr = self.calculator.get_unit_abbreviation()
-        self.scale_label.setText(f"Total Oil Weight ({unit_abbr}):")
+        label = "Total Ingredient Weight" if self.is_candy_mode else "Total Oil Weight"
+        self.scale_label.setText(f"{label} ({unit_abbr}):")
 
     def update_results(self):
         """Update calculation results"""
@@ -661,16 +740,18 @@ class MainWindow(QMainWindow):
             properties, self.calculator.unit_system, self.current_recipe.name
         )
         # update FA breakdown tab if present
-        try:
-            if hasattr(self, "fa_widget") and self.fa_widget:
-                self.fa_widget.update_fa(properties, self.calculator.unit_system)
-        except (ValueError, KeyError, AttributeError):
-            pass
+        if not self.is_candy_mode:
+            try:
+                if hasattr(self, "fa_widget") and self.fa_widget:
+                    self.fa_widget.update_fa(properties, self.calculator.unit_system)
+            except (ValueError, KeyError, AttributeError):
+                pass
         self.update_oils_table()
-        self.update_additives_table()
+        if not self.is_candy_mode:
+            self.update_additives_table()
 
         # Update fragrance calc
-        if hasattr(self, "fragrance_widget"):
+        if not self.is_candy_mode and hasattr(self, "fragrance_widget"):
             self.fragrance_widget.update_calculation()
 
         # Update Profit Tab
@@ -680,11 +761,12 @@ class MainWindow(QMainWindow):
             total_cost = 0.0
             for name, weight in self.calculator.oils.items():
                 total_cost += weight * self.cost_manager.get_cost_per_gram(name)
-            for name, weight in self.calculator.additives.items():
-                total_cost += weight * self.cost_manager.get_cost_per_gram(name)
-            total_cost += properties.get(
-                "lye_weight", 0.0
-            ) * self.cost_manager.get_cost_per_gram(self.calculator.lye_type)
+            if not self.is_candy_mode:
+                for name, weight in self.calculator.additives.items():
+                    total_cost += weight * self.cost_manager.get_cost_per_gram(name)
+                total_cost += properties.get(
+                    "lye_weight", 0.0
+                ) * self.cost_manager.get_cost_per_gram(self.calculator.lye_type)
 
             # Estimate bars based on current bar size setting in results widget
             bar_size = self.results_widget.bar_size_spin.value()
@@ -704,6 +786,16 @@ class MainWindow(QMainWindow):
         val = self.scale_spinbox.value()
         return self.calculator.convert_to_grams(val, self.calculator.unit_system)
 
+    def on_mold_weight_calculated(self, grams):
+        """Handle weight calculated from mold tab"""
+        # Convert to current unit
+        val = self.calculator.convert_weight(grams, self.calculator.unit_system)
+        self.scale_spinbox.setValue(val)
+        self.tabs.setCurrentWidget(self.tabs.widget(0))  # Switch to recipe tab
+        self.statusBar().showMessage(
+            f"Target weight set to {val:.2f} based on mold volume."
+        )
+
     def scale_recipe(self):
         """Scale recipe to new weight"""
         new_weight = self.scale_spinbox.value()
@@ -721,9 +813,10 @@ class MainWindow(QMainWindow):
 
             self.calculator.scale_recipe(weight_grams)
 
-            # Scale Additives
-            for name, amount in self.calculator.additives.items():
-                self.calculator.additives[name] = amount * ratio
+            if not self.is_candy_mode:
+                # Scale Additives
+                for name, amount in self.calculator.additives.items():
+                    self.calculator.additives[name] = amount * ratio
 
             self.update_results()
             self.statusBar().showMessage(f"Recipe scaled to {new_weight}{unit_abbr}")
@@ -747,14 +840,15 @@ class MainWindow(QMainWindow):
         for name, weight in self.calculator.oils.items():
             if not self.cost_manager.has_sufficient_stock(name, weight):
                 insufficient_items.append(name)
-        for name, weight in self.calculator.additives.items():
-            if not self.cost_manager.has_sufficient_stock(name, weight):
-                insufficient_items.append(name)
-        lye_weight = self.calculator.get_lye_weight()
-        if not self.cost_manager.has_sufficient_stock(
-            self.calculator.lye_type, lye_weight
-        ):
-            insufficient_items.append(self.calculator.lye_type)
+        if not self.is_candy_mode:
+            for name, weight in self.calculator.additives.items():
+                if not self.cost_manager.has_sufficient_stock(name, weight):
+                    insufficient_items.append(name)
+            lye_weight = self.calculator.get_lye_weight()
+            if not self.cost_manager.has_sufficient_stock(
+                self.calculator.lye_type, lye_weight
+            ):
+                insufficient_items.append(self.calculator.lye_type)
 
         if insufficient_items:
             QMessageBox.warning(
@@ -781,14 +875,15 @@ class MainWindow(QMainWindow):
         for name, weight in self.calculator.oils.items():
             process_deduction(name, weight)
 
-        # Deduct Additives
-        for name, weight in self.calculator.additives.items():
-            process_deduction(name, weight)
+        if not self.is_candy_mode:
+            # Deduct Additives
+            for name, weight in self.calculator.additives.items():
+                process_deduction(name, weight)
 
-        # Deduct Lye
-        lye_type = self.calculator.lye_type
-        lye_weight = self.calculator.get_lye_weight()
-        process_deduction(lye_type, lye_weight)
+            # Deduct Lye
+            lye_type = self.calculator.lye_type
+            lye_weight = self.calculator.get_lye_weight()
+            process_deduction(lye_type, lye_weight)
 
         # Refresh inventory UI if visible
         if hasattr(self, "inventory_widget"):
@@ -824,13 +919,20 @@ class MainWindow(QMainWindow):
         if ok and name:
             self.current_recipe.name = name
             self.current_recipe.oils = self.calculator.oils.copy()
-            self.current_recipe.additives = self.calculator.additives.copy()
-            self.current_recipe.superfat_percent = self.calculator.superfat_percent
-            self.current_recipe.water_to_lye_ratio = self.calculator.water_to_lye_ratio
-            self.current_recipe.lye_type = self.calculator.lye_type
-            self.current_recipe.water_calc_method = self.calculator.water_calc_method
-            self.current_recipe.water_percent = self.calculator.water_percent
-            self.current_recipe.lye_concentration = self.calculator.lye_concentration
+            if not self.is_candy_mode:
+                self.current_recipe.additives = self.calculator.additives.copy()
+                self.current_recipe.superfat_percent = self.calculator.superfat_percent
+                self.current_recipe.water_to_lye_ratio = (
+                    self.calculator.water_to_lye_ratio
+                )
+                self.current_recipe.lye_type = self.calculator.lye_type
+                self.current_recipe.water_calc_method = (
+                    self.calculator.water_calc_method
+                )
+                self.current_recipe.water_percent = self.calculator.water_percent
+                self.current_recipe.lye_concentration = (
+                    self.calculator.lye_concentration
+                )
 
             filepath = self.recipe_manager.save_recipe(self.current_recipe)
 
@@ -839,7 +941,8 @@ class MainWindow(QMainWindow):
                 try:
                     with open(filepath, "r") as f:
                         data = json.load(f)
-                    data["additives"] = self.calculator.additives
+                    if not self.is_candy_mode:
+                        data["additives"] = self.calculator.additives
                     data["notes"] = self.notes_widget.get_notes()
                     with open(filepath, "w") as f:
                         json.dump(data, f, indent=4)
@@ -868,8 +971,9 @@ class MainWindow(QMainWindow):
             try:
                 with open(filepath, "r") as f:
                     data = json.load(f)
-                    if "additives" in data:
-                        self.calculator.additives = data["additives"]
+                    if not self.is_candy_mode:
+                        if "additives" in data:
+                            self.calculator.additives = data["additives"]
                     if "notes" in data:
                         self.notes_widget.set_notes(data["notes"])
                     else:
@@ -878,46 +982,49 @@ class MainWindow(QMainWindow):
                 print(f"Error loading additives from JSON: {e}")
 
             # Update UI to match loaded recipe parameters
-            self.recipe_settings.blockSignals(True)
-            try:
-                self.recipe_settings.lye_combo.setCurrentText(self.calculator.lye_type)
-                self.recipe_settings.superfat_spinbox.setValue(
-                    self.calculator.superfat_percent
-                )
+            if not self.is_candy_mode:
+                self.recipe_settings.blockSignals(True)
+                try:
+                    self.recipe_settings.lye_combo.setCurrentText(
+                        self.calculator.lye_type
+                    )
+                    self.recipe_settings.superfat_spinbox.setValue(
+                        self.calculator.superfat_percent
+                    )
 
-                method = self.calculator.water_calc_method
-                method_map_rev = {
-                    "ratio": "Water:Lye Ratio",
-                    "percent": "Water % of Oils",
-                    "concentration": "Lye Concentration",
-                }
-                self.recipe_settings.water_method_combo.setCurrentText(
-                    method_map_rev.get(method, "Water:Lye Ratio")
-                )
+                    method = self.calculator.water_calc_method
+                    method_map_rev = {
+                        "ratio": "Water:Lye Ratio",
+                        "percent": "Water % of Oils",
+                        "concentration": "Lye Concentration",
+                    }
+                    self.recipe_settings.water_method_combo.setCurrentText(
+                        method_map_rev.get(method, "Water:Lye Ratio")
+                    )
 
-                # Update water spinbox based on method
-                if method == "percent":
-                    self.recipe_settings.water_value_label.setText("% of Oils:")
-                    self.recipe_settings.water_value_spinbox.setRange(0, 100)
-                    self.recipe_settings.water_value_spinbox.setValue(
-                        self.calculator.water_percent
-                    )
-                elif method == "concentration":
-                    self.recipe_settings.water_value_label.setText(
-                        "Lye % (concentration):"
-                    )
-                    self.recipe_settings.water_value_spinbox.setRange(1, 99)
-                    self.recipe_settings.water_value_spinbox.setValue(
-                        self.calculator.lye_concentration
-                    )
-                else:
-                    self.recipe_settings.water_value_label.setText("Ratio:")
-                    self.recipe_settings.water_value_spinbox.setRange(0.5, 5)
-                    self.recipe_settings.water_value_spinbox.setValue(
-                        self.calculator.water_to_lye_ratio
-                    )
-            finally:
-                self.recipe_settings.blockSignals(False)
+                    # Update water spinbox based on method
+                    if method == "percent":
+                        self.recipe_settings.water_value_label.setText("% of Oils:")
+                        self.recipe_settings.water_value_spinbox.setRange(0, 100)
+                        self.recipe_settings.water_value_spinbox.setValue(
+                            self.calculator.water_percent
+                        )
+                    elif method == "concentration":
+                        self.recipe_settings.water_value_label.setText(
+                            "Lye % (concentration):"
+                        )
+                        self.recipe_settings.water_value_spinbox.setRange(1, 99)
+                        self.recipe_settings.water_value_spinbox.setValue(
+                            self.calculator.lye_concentration
+                        )
+                    else:
+                        self.recipe_settings.water_value_label.setText("Ratio:")
+                        self.recipe_settings.water_value_spinbox.setRange(0.5, 5)
+                        self.recipe_settings.water_value_spinbox.setValue(
+                            self.calculator.water_to_lye_ratio
+                        )
+                finally:
+                    self.recipe_settings.blockSignals(False)
 
             # Enforce the currently selected unit system from settings
             current_unit_text = self.settings_widget.unit_combo.currentText()
@@ -934,8 +1041,10 @@ class MainWindow(QMainWindow):
     def load_preferences(self):
         """Load persisted preferences into the calculator and UI."""
         # Block signals to prevent overwriting settings while loading
-        self.settings_widget.blockSignals(True)
-        self.recipe_settings.blockSignals(True)
+        if hasattr(self, "settings_widget"):
+            self.settings_widget.blockSignals(True)
+        if not self.is_candy_mode and hasattr(self, "recipe_settings"):
+            self.recipe_settings.blockSignals(True)
         try:
             # Unit System
             # Default to 'grams' if not found or invalid
@@ -953,41 +1062,42 @@ class MainWindow(QMainWindow):
             if not found_unit and combo.count() > 0:
                 combo.setCurrentIndex(0)
 
-            # Superfat
-            superfat = float(self._settings.value("superfat_percent", 5.0))
-            self.recipe_settings.superfat_spinbox.setValue(superfat)
+            if not self.is_candy_mode:
+                # Superfat
+                superfat = float(self._settings.value("superfat_percent", 5.0))
+                self.recipe_settings.superfat_spinbox.setValue(superfat)
 
-            # Water Method
-            water_method = self._settings.value("water_calc_method", "ratio")
-            # Map internal keys to UI text
-            method_map_rev = {
-                "ratio": "Water:Lye Ratio",
-                "percent": "Water % of Oils",
-                "concentration": "Lye Concentration",
-            }
-            target_text = method_map_rev.get(water_method, "Water:Lye Ratio")
-            combo = self.recipe_settings.water_method_combo
-            for i in range(combo.count()):
-                if combo.itemText(i) == target_text:
-                    combo.setCurrentIndex(i)
-                    break
+                # Water Method
+                water_method = self._settings.value("water_calc_method", "ratio")
+                # Map internal keys to UI text
+                method_map_rev = {
+                    "ratio": "Water:Lye Ratio",
+                    "percent": "Water % of Oils",
+                    "concentration": "Lye Concentration",
+                }
+                target_text = method_map_rev.get(water_method, "Water:Lye Ratio")
+                combo = self.recipe_settings.water_method_combo
+                for i in range(combo.count()):
+                    if combo.itemText(i) == target_text:
+                        combo.setCurrentIndex(i)
+                        break
 
-            # Water Value
-            # Load all potential values with safe defaults
-            w_ratio = float(self._settings.value("water_to_lye_ratio", 2.0))
-            w_percent = float(self._settings.value("water_percent", 38.0))
-            lye_conc = float(self._settings.value("lye_concentration", 30.0))
+                # Water Value
+                # Load all potential values with safe defaults
+                w_ratio = float(self._settings.value("water_to_lye_ratio", 2.0))
+                w_percent = float(self._settings.value("water_percent", 38.0))
+                lye_conc = float(self._settings.value("lye_concentration", 30.0))
 
-            if water_method == "percent":
-                self.recipe_settings.water_value_spinbox.setValue(w_percent)
-            elif water_method == "concentration":
-                self.recipe_settings.water_value_spinbox.setValue(lye_conc)
-            else:
-                self.recipe_settings.water_value_spinbox.setValue(w_ratio)
+                if water_method == "percent":
+                    self.recipe_settings.water_value_spinbox.setValue(w_percent)
+                elif water_method == "concentration":
+                    self.recipe_settings.water_value_spinbox.setValue(lye_conc)
+                else:
+                    self.recipe_settings.water_value_spinbox.setValue(w_ratio)
 
-            # Lye Type
-            lye_type = self._settings.value("lye_type", "NaOH")
-            self.recipe_settings.lye_combo.setCurrentText(lye_type)
+                # Lye Type
+                lye_type = self._settings.value("lye_type", "NaOH")
+                self.recipe_settings.lye_combo.setCurrentText(lye_type)
 
             # Theme
             theme = self._settings.value("theme_accent", "Blue")
@@ -996,8 +1106,10 @@ class MainWindow(QMainWindow):
         except (ValueError, TypeError) as e:
             print(f"Error loading preferences: {e}")
         finally:
-            self.settings_widget.blockSignals(False)
-            self.recipe_settings.blockSignals(False)
+            if hasattr(self, "settings_widget"):
+                self.settings_widget.blockSignals(False)
+            if not self.is_candy_mode and hasattr(self, "recipe_settings"):
+                self.recipe_settings.blockSignals(False)
 
         # Sync UI state to calculator to ensure consistency
         self.sync_settings_to_calculator()
@@ -1007,24 +1119,53 @@ class MainWindow(QMainWindow):
         # Refresh UI to reflect loaded preferences
         self.update_scale_label()
         self.update_oils_table()
-        self.update_additives_table()
+        if not self.is_candy_mode:
+            self.update_additives_table()
         self.update_results()
 
     def save_preferences(self):
         """Persist current preferences to QSettings."""
         self._settings.setValue("unit_system", self.calculator.unit_system)
-        self._settings.setValue(
-            "superfat_percent", float(self.calculator.superfat_percent)
+        (
+            self._settings.setValue(
+                "superfat_percent", float(self.calculator.superfat_percent)
+            )
+            if not self.is_candy_mode
+            else None
         )
-        self._settings.setValue("water_calc_method", self.calculator.water_calc_method)
-        self._settings.setValue(
-            "water_to_lye_ratio", float(self.calculator.water_to_lye_ratio)
+        (
+            self._settings.setValue(
+                "water_calc_method", self.calculator.water_calc_method
+            )
+            if not self.is_candy_mode
+            else None
         )
-        self._settings.setValue("water_percent", float(self.calculator.water_percent))
-        self._settings.setValue(
-            "lye_concentration", float(self.calculator.lye_concentration)
+        (
+            self._settings.setValue(
+                "water_to_lye_ratio", float(self.calculator.water_to_lye_ratio)
+            )
+            if not self.is_candy_mode
+            else None
         )
-        self._settings.setValue("lye_type", self.calculator.lye_type)
+        (
+            self._settings.setValue(
+                "water_percent", float(self.calculator.water_percent)
+            )
+            if not self.is_candy_mode
+            else None
+        )
+        (
+            self._settings.setValue(
+                "lye_concentration", float(self.calculator.lye_concentration)
+            )
+            if not self.is_candy_mode
+            else None
+        )
+        (
+            self._settings.setValue("lye_type", self.calculator.lye_type)
+            if not self.is_candy_mode
+            else None
+        )
         self._settings.setValue(
             "theme_accent", self.settings_widget.theme_combo.currentText()
         )
@@ -1036,23 +1177,24 @@ class MainWindow(QMainWindow):
         if unit_text:
             self.calculator.set_unit_system(unit_text.lower())
 
-        # Update Superfat
-        self.calculator.set_superfat(self.recipe_settings.superfat_spinbox.value())
+        if not self.is_candy_mode:
+            # Update Superfat
+            self.calculator.set_superfat(self.recipe_settings.superfat_spinbox.value())
 
-        # Update Lye Type
-        self.calculator.set_lye_type(self.recipe_settings.lye_combo.currentText())
+            # Update Lye Type
+            self.calculator.set_lye_type(self.recipe_settings.lye_combo.currentText())
 
-        # Update Water
-        method_text = self.recipe_settings.water_method_combo.currentText()
-        val = self.recipe_settings.water_value_spinbox.value()
+            # Update Water
+            method_text = self.recipe_settings.water_method_combo.currentText()
+            val = self.recipe_settings.water_value_spinbox.value()
 
-        method_map = {
-            "Water:Lye Ratio": "ratio",
-            "Water % of Oils": "percent",
-            "Lye Concentration": "concentration",
-        }
-        method = method_map.get(method_text, "ratio")
-        self.calculator.set_water_calc_method(method, val)
+            method_map = {
+                "Water:Lye Ratio": "ratio",
+                "Water % of Oils": "percent",
+                "Lye Concentration": "concentration",
+            }
+            method = method_map.get(method_text, "ratio")
+            self.calculator.set_water_calc_method(method, val)
 
         # Update UI elements that depend on settings
         self.update_oils_table_headers()
@@ -1098,6 +1240,25 @@ class MainWindow(QMainWindow):
             )
             # update the oil weight
             self.calculator.oils[old_name] = grams
+            self.update_results()
+
+        # Percent change
+        if column == 2:
+            pct_item = self.oils_table.item(row, 2)
+            if not pct_item:
+                return
+            try:
+                percent = float(pct_item.text())
+            except ValueError:
+                return
+
+            # Calculate weight based on target batch size
+            target_grams = self.get_target_batch_weight()
+            if target_grams <= 0:
+                target_grams = self.calculator.get_total_oil_weight()
+
+            new_grams = target_grams * (percent / 100.0)
+            self.calculator.oils[old_name] = new_grams
             self.update_results()
 
     def remove_selected_oil(self):

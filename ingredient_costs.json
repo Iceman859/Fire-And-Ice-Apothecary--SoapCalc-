@@ -1,22 +1,22 @@
 {
     "Shea Butter": {
-        "price": 9.99,
-        "quantity": 0.5,
+        "price": 5.74,
+        "quantity": 0.29,
         "unit": "lbs"
     },
     "Castor Oil": {
-        "price": 11.81,
-        "quantity": 18.8,
+        "price": 8.19,
+        "quantity": 13.03,
         "unit": "fl oz"
     },
     "Goat Milk": {
-        "price": 19.96,
-        "quantity": 16.0,
+        "price": 14.35,
+        "quantity": 11.5,
         "unit": "oz"
     },
     "NaOH": {
-        "price": 6.69,
-        "quantity": 0.6,
+        "price": 0.32,
+        "quantity": 0.69,
         "unit": "lbs"
     },
     "Kaolin Clay": {
@@ -30,18 +30,18 @@
         "unit": "oz"
     },
     "Coconut Oil": {
-        "price": 18.48,
-        "quantity": 80.96,
+        "price": 13.28,
+        "quantity": 58.16,
         "unit": "oz"
     },
     "Olive Oil": {
-        "price": 16.57,
-        "quantity": 72.84,
+        "price": 8.5,
+        "quantity": 37.36,
         "unit": "oz"
     },
     "Lard, Pig Tallow (Manteca)": {
-        "price": 16.7,
-        "quantity": 6.4,
+        "price": 14.09,
+        "quantity": 5.4,
         "unit": "lbs"
     },
     "Sugar": {
@@ -50,8 +50,8 @@
         "unit": "lbs"
     },
     "Sodium Lactate": {
-        "price": 22.49,
-        "quantity": 38.4,
+        "price": 22.08,
+        "quantity": 37.71,
         "unit": "oz"
     },
     "Cool Water Fragrance": {
@@ -63,5 +63,10 @@
         "price": 6.95,
         "quantity": 0.5,
         "unit": "oz"
+    },
+    "Tallow Beef": {
+        "price": 40.58,
+        "quantity": 6.31,
+        "unit": "lbs"
     }
 }
