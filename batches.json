@@ -1,5 +1,58 @@
 [
     {
+        "id": "45e7f639-17af-44a9-b350-83696949fd26",
+        "lot_number": "20260308-C4AA",
+        "recipe_name": "Shea Bar",
+        "date_made": "2026-03-08",
+        "cure_date": "2026-04-05",
+        "status": "Curing",
+        "total_weight": 1161.36,
+        "recipe_snapshot": {
+            "oils": {
+                "Shea Butter": 181.4368,
+                "Olive Oil": 408.2328,
+                "Coconut Oil": 272.1552,
+                "Castor Oil": 45.359199999999994
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 2.0,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "ratio",
+            "water_percent": 38.0,
+            "lye_concentration": 33.0,
+            "properties": {
+                "total_oil_weight": 907.18,
+                "lye_weight": 127.25,
+                "water_weight": 126.93,
+                "total_batch_weight": 1161.36,
+                "lye_percentage": 14.03,
+                "water_percentage": 13.99,
+                "fa_breakdown": {
+                    "lauric": 14.4,
+                    "myristic": 5.7,
+                    "palmitic": 10.0,
+                    "stearic": 10.25,
+                    "oleic": 43.25,
+                    "linoleic": 7.4,
+                    "linolenic": 0.45,
+                    "ricinoleic": 4.5
+                },
+                "relative_qualities": {
+                    "hardness": 40.349999999999994,
+                    "cleansing": 20.099999999999998,
+                    "bubbly": 24.599999999999998,
+                    "creamy": 24.75,
+                    "conditioning": 55.6,
+                    "iodine": 57.349999999999994,
+                    "ins": 152.6
+                }
+            },
+            "name": "Shea Bar"
+        },
+        "notes": "[2026-03-08 15:32] Mixed and placed in freezer"
+    },
+    {
         "id": "a3ef8a99-8030-4813-a773-a0611fe738a1",
         "lot_number": "20260301-E1A5",
         "recipe_name": "Baby Buttermilk Carrot Bar",
@@ -51,7 +104,7 @@
             },
             "name": "Baby Buttermilk Carrot Bar"
         },
-        "notes": "[2026-03-01 15:16]  In Mold\n\n[2026-03-02 17:23]  Unmolded And Cut"
+        "notes": "[2026-03-01 15:16]  In Mold\n\n[2026-03-02 17:23]  Unmolded And Cut\n\n[2026-03-06 12:41] Current Weight: 5.3oz \nProjected to be a 4.5 oz bar"
     },
     {
         "id": "3ad35753-67a4-4a35-bfef-4d6ce75ba5ee",
@@ -104,7 +157,7 @@
             },
             "name": "Goat Milk Tallow - Unscented 3/1/26"
         },
-        "notes": "[2026-03-01 14:38] In Mold\n\n[2026-03-02 17:24]  Unmolded And Cut"
+        "notes": "[2026-03-01 14:38] In Mold\n\n[2026-03-02 17:24]  Unmolded And Cut\n\n[2026-03-06 12:41] Current Weight: 4.6oz Projected to be 4oz bar"
     },
     {
         "id": "ff1fa146-323d-4d8c-b52e-b9cd3b9114fd",

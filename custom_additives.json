@@ -4,5 +4,11 @@
         "water_percent_adjust": 0.0,
         "default_percent_of_oils": 1.0,
         "is_water_replacement": true
+    },
+    "Vitamin E Oil": {
+        "description": "",
+        "water_percent_adjust": 0.0,
+        "default_percent_of_oils": 0.5,
+        "is_water_replacement": false
     }
 }

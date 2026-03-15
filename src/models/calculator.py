@@ -1,7 +1,7 @@
 """Calculation models for soap making"""
 
 from typing import Dict, List, Tuple
-from ..data.oils import get_oil_sap, SoapMath
+from ..data.oils import SoapMath
 
 
 class SoapCalculator:
@@ -168,10 +168,26 @@ class SoapCalculator:
         # (e.g. more conditioning), but does not change these theoretical profile metrics.
         qualities = SoapMath.calculate_qualities(self.oils)
 
+        # Define conversion constants
+        GRAMS_TO_OZ = 0.03527396
+        GRAMS_TO_LBS = 0.00220462
+
+        # Check what the current unit system is
+        if self.unit_system == "ounces":
+            total_oil *= GRAMS_TO_OZ
+            lye *= GRAMS_TO_OZ
+            water *= GRAMS_TO_OZ
+            total_weight *= GRAMS_TO_OZ
+        elif self.unit_system == "pounds":
+            total_oil *= GRAMS_TO_LBS
+            lye *= GRAMS_TO_LBS
+            water *= GRAMS_TO_LBS
+            total_weight *= GRAMS_TO_LBS
+
         return {
             "total_oil_weight": round(total_oil, 2),
-            "lye_weight": lye,
-            "water_weight": water,
+            "lye_weight": round(lye, 3),
+            "water_weight": round(water, 2),
             "total_batch_weight": round(total_weight, 2),
             "lye_percentage": round((lye / total_oil * 100) if total_oil > 0 else 0, 2),
             "water_percentage": round(
@@ -179,6 +195,7 @@ class SoapCalculator:
             ),
             "fa_breakdown": fa_percentages,
             "relative_qualities": qualities,
+            "unit_system": self.get_unit_abbreviation()
         }
 
     def scale_recipe(self, new_batch_weight: float):
@@ -212,10 +229,11 @@ class SoapCalculator:
             self.lye_type = lye_type
 
     def set_unit_system(self, unit: str):
-        """Set unit system ('grams', 'ounces', 'pounds')"""
+        unit = str(unit).lower()
         if unit in ["grams", "ounces", "pounds"]:
             self.unit_system = unit
-
+        else:
+            self.unit_system = "grams"
     def set_water_calc_method(self, method: str, value: float = None):
         """
         Set water calculation method.
@@ -252,7 +270,9 @@ class SoapCalculator:
         elif to_unit == "pounds":
             return weight_grams / 453.592
         return weight_grams
-
+    def convert_from_grams(self, weight_grams: float, to_unit: str) -> float:
+            """ Alias for convert_weight to keep naming consistent with convert_to_grams """
+            return self.convert_weight(weight_grams, to_unit)
     def convert_to_grams(self, weight: float, from_unit: str) -> float:
         """
         Convert weight from any unit to grams.
@@ -281,11 +301,15 @@ class SoapCalculator:
         # Just delegate to the oil-based quality calculation
         return SoapMath.calculate_qualities(self.oils)
 
-    def get_unit_abbreviation(self) -> str:
-        """Get abbreviation for current unit system"""
-        abbr = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
-        return abbr.get(self.unit_system, "g")
-
+    def get_unit_abbreviation(self):
+        mapping = {
+            "grams": "g",
+            "ounces": "oz",
+            "pounds": "lb"
+        }
+        # Using .get() ensures that if self.unit_system is "Ounces" (Capitalized)
+        # or missing, it defaults to "g" instead of None.
+        return mapping.get(self.unit_system, "g")
     def get_recipe_dict(self) -> Dict:
         """Get recipe as dictionary for saving"""
         return {
@@ -302,11 +326,33 @@ class SoapCalculator:
 
     def load_recipe_dict(self, recipe_data: Dict):
         """Load recipe from dictionary"""
+        self.recipe_name = recipe_data.get("name", "Untitled Recipe")
         self.oils = recipe_data.get("oils", {}).copy()
         self.superfat_percent = recipe_data.get("superfat_percent", 5.0)
         self.water_to_lye_ratio = recipe_data.get("water_to_lye_ratio", 2.0)
         self.lye_type = recipe_data.get("lye_type", "NaOH")
-        self.unit_system = recipe_data.get("unit_system", "grams")
         self.water_calc_method = recipe_data.get("water_calc_method", "ratio")
         self.water_percent = recipe_data.get("water_percent", 30.0)
         self.lye_concentration = recipe_data.get("lye_concentration", 33.0)
+
+        # Force the calculator to use the unit saved in the recipe
+        self.unit_system = recipe_data.get("unit_system", "ounces").lower()
+
+    def get_recipe_data(self) -> dict:
+        """Returns data formatted for the Recipe model:
+
+        """
+        return {
+            "name": getattr(self, 'recipe_name', "New Recipe"),
+            "unit_system": self.unit_system,
+            "oils": self.oils,
+            "superfat_percent": self.superfat_percent,
+            "water_to_lye_ratio": self.water_to_lye_ratio,
+            "lye_type": self.lye_type,
+            "batch_weight": self.total_batch_weight,
+            "water_calc_method": self.water_calc_method,
+            "water_percent": self.water_percent,
+            "lye_concentration": self.lye_concentration,
+            "additives": self.additives,
+
+        }

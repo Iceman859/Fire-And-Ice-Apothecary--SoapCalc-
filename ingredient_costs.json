@@ -1,22 +1,17 @@
 {
-    "Shea Butter": {
-        "price": 5.74,
-        "quantity": 0.29,
-        "unit": "lbs"
-    },
     "Castor Oil": {
-        "price": 8.19,
-        "quantity": 13.03,
+        "price": 7.23,
+        "quantity": 11.5,
         "unit": "fl oz"
     },
     "Goat Milk": {
-        "price": 14.35,
-        "quantity": 11.5,
+        "price": 8.73,
+        "quantity": 7.0,
         "unit": "oz"
     },
     "NaOH": {
-        "price": 0.32,
-        "quantity": 0.69,
+        "price": 0.19,
+        "quantity": 0.41,
         "unit": "lbs"
     },
     "Kaolin Clay": {
@@ -30,13 +25,13 @@
         "unit": "oz"
     },
     "Coconut Oil": {
-        "price": 13.28,
-        "quantity": 58.16,
+        "price": 11.09,
+        "quantity": 48.56,
         "unit": "oz"
     },
     "Olive Oil": {
-        "price": 8.5,
-        "quantity": 37.36,
+        "price": 5.22,
+        "quantity": 22.96,
         "unit": "oz"
     },
     "Lard, Pig Tallow (Manteca)": {
@@ -50,8 +45,8 @@
         "unit": "lbs"
     },
     "Sodium Lactate": {
-        "price": 22.08,
-        "quantity": 37.71,
+        "price": 21.87,
+        "quantity": 37.36,
         "unit": "oz"
     },
     "Cool Water Fragrance": {
@@ -68,5 +63,35 @@
         "price": 40.58,
         "quantity": 6.31,
         "unit": "lbs"
+    },
+    "Vitamin E Oil": {
+        "price": 26.99,
+        "quantity": 16.0,
+        "unit": "oz"
+    },
+    "Optiphen (Preservative)": {
+        "price": 9.49,
+        "quantity": 1.41,
+        "unit": "oz"
+    },
+    "Shea Butter": {
+        "price": 26.59,
+        "quantity": 4.6,
+        "unit": "lbs"
+    },
+    "Rapeseed Oil, unrefined canola": {
+        "price": 12.88,
+        "quantity": 192.0,
+        "unit": "fl oz"
+    },
+    "Palm Oil": {
+        "price": 39.97,
+        "quantity": 7.0,
+        "unit": "lbs"
+    },
+    "Colloidal Oatmeal": {
+        "price": 24.99,
+        "quantity": 16.0,
+        "unit": "oz"
     }
 }
