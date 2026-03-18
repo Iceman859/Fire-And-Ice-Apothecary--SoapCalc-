@@ -1,22 +1,22 @@
 {
     "Castor Oil": {
-        "price": 7.23,
-        "quantity": 11.5,
+        "price": 2.42,
+        "quantity": 3.85,
         "unit": "fl oz"
     },
     "Goat Milk": {
-        "price": 8.73,
-        "quantity": 7.0,
-        "unit": "oz"
+        "price": 8.42,
+        "quantity": 0.84,
+        "unit": "lbs"
     },
     "NaOH": {
-        "price": 0.19,
-        "quantity": 0.41,
+        "price": 0.03,
+        "quantity": 1.88,
         "unit": "lbs"
     },
     "Kaolin Clay": {
-        "price": 8.54,
-        "quantity": 3.32,
+        "price": 0.25,
+        "quantity": 2.05,
         "unit": "oz"
     },
     "Oatmeal Milk And Honey (Fragrance Oil)": {
@@ -25,13 +25,13 @@
         "unit": "oz"
     },
     "Coconut Oil": {
-        "price": 11.09,
-        "quantity": 48.56,
+        "price": 0.13,
+        "quantity": 0.56,
         "unit": "oz"
     },
     "Olive Oil": {
-        "price": 5.22,
-        "quantity": 22.96,
+        "price": 0.83,
+        "quantity": 43.4,
         "unit": "oz"
     },
     "Lard, Pig Tallow (Manteca)": {
@@ -40,13 +40,13 @@
         "unit": "lbs"
     },
     "Sugar": {
-        "price": 3.19,
-        "quantity": 4.0,
+        "price": 3.15,
+        "quantity": 3.96,
         "unit": "lbs"
     },
     "Sodium Lactate": {
-        "price": 21.87,
-        "quantity": 37.36,
+        "price": 20.82,
+        "quantity": 35.61,
         "unit": "oz"
     },
     "Cool Water Fragrance": {
@@ -64,19 +64,14 @@
         "quantity": 6.31,
         "unit": "lbs"
     },
-    "Vitamin E Oil": {
-        "price": 26.99,
-        "quantity": 16.0,
-        "unit": "oz"
-    },
     "Optiphen (Preservative)": {
         "price": 9.49,
         "quantity": 1.41,
         "unit": "oz"
     },
     "Shea Butter": {
-        "price": 26.59,
-        "quantity": 4.6,
+        "price": 15.04,
+        "quantity": 2.6,
         "unit": "lbs"
     },
     "Rapeseed Oil, unrefined canola": {
@@ -84,14 +79,144 @@
         "quantity": 192.0,
         "unit": "fl oz"
     },
-    "Palm Oil": {
-        "price": 39.97,
-        "quantity": 7.0,
-        "unit": "lbs"
-    },
     "Colloidal Oatmeal": {
         "price": 24.99,
         "quantity": 16.0,
         "unit": "oz"
+    },
+    "Cocoa Butter": {
+        "price": 39.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Marigold Yellow Mica": {
+        "price": 3.99,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Aquamarine Dream Fragrance Oil": {
+        "price": 7.99,
+        "quantity": 1.75,
+        "unit": "oz"
+    },
+    "4 oz Clear Jar with White Cap": {
+        "price": 9.99,
+        "quantity": 10.0,
+        "unit": "count"
+    },
+    "Optiphen": {
+        "price": 4.99,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Berry Silk Fragrance Oil": {
+        "price": 8.99,
+        "quantity": 3.0,
+        "unit": "oz"
+    },
+    "Pink Strawberry Fragrance Oil": {
+        "price": 7.99,
+        "quantity": 2.0,
+        "unit": "oz"
+    },
+    "Oatmeal Milk and Honey Fragrance Oil": {
+        "price": 11.99,
+        "quantity": 4.0,
+        "unit": "oz"
+    },
+    "Tobacco and Bay Leaf Fragrance Oil": {
+        "price": 3.85,
+        "quantity": 0.75,
+        "unit": "oz"
+    },
+    "Kentucky Bourbon Fragrance Oil": {
+        "price": 8.99,
+        "quantity": 2.0,
+        "unit": "oz"
+    },
+    "Bergamot Black Tea Fragrance Oil": {
+        "price": 9.99,
+        "quantity": 1.75,
+        "unit": "oz"
+    },
+    "Emulsifying Wax": {
+        "price": 7.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Stearic Acid": {
+        "price": 10.99,
+        "quantity": 16.0,
+        "unit": "oz"
+    },
+    "Polysorbate 80": {
+        "price": 2.09,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Cetyl Alcohol": {
+        "price": 3.49,
+        "quantity": 2.0,
+        "unit": "oz"
+    },
+    "Walnut Shells": {
+        "price": 2.99,
+        "quantity": 3.0,
+        "unit": "oz"
+    },
+    "Vitamin E Oil": {
+        "price": 5.99,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Glycerin - Liquid": {
+        "price": 5.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Pear Pop Fragrance Oil": {
+        "price": 9.99,
+        "quantity": 2.0,
+        "unit": "oz"
+    },
+    "Sparkling Apple Blossom Fragrance Oil": {
+        "price": 9.99,
+        "quantity": 2.0,
+        "unit": "oz"
+    },
+    "Organic Cocoa Butter Wafers": {
+        "price": 39.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Hot Pink Mica": {
+        "price": 3.99,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Hunter Green Mica": {
+        "price": 3.99,
+        "quantity": 1.0,
+        "unit": "oz"
+    },
+    "Natural Hemp Seed Oil": {
+        "price": 11.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Sweet Almond Oil": {
+        "price": 8.99,
+        "quantity": 1.0,
+        "unit": "lbs"
+    },
+    "Droppers With Suction Bulb": {
+        "price": 2.99,
+        "quantity": 10.0,
+        "unit": "count"
+    },
+    "Mini Scoop": {
+        "price": 2.99,
+        "quantity": 10.0,
+        "unit": "count"
     }
 }

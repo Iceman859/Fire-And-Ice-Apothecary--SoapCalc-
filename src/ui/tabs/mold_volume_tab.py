@@ -1,7 +1,8 @@
 """Mold Volume Tab"""
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt6.QtCore import pyqtSignal, QSettings
+from PyQt6.QtCore import pyqtSignal, QSettings, Qt
+import math
 from PyQt6.QtWidgets import (
     QFormLayout,
     QMessageBox,

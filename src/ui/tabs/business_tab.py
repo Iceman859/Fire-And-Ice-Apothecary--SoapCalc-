@@ -14,12 +14,15 @@ from PyQt6.QtWidgets import (
     QInputDialog,
 )
 
-
+from src.models import SoapCalculator as Calculator
+from src.models.cost_manager import CostManager
 class ProfitAnalysisWidget(QWidget):
     """Widget for calculating business profit and pricing"""
 
     def __init__(self):
         super().__init__()
+        self.calculator = Calculator()
+        self.cost_manager = CostManager()
         self.batch_cost = 0.0
         self.bar_count = 0.0
         self.settings = QSettings("FireAndIceApothecary", "SoapCalc")

@@ -218,17 +218,17 @@ class RecipeController:
                     pass
     #Scale Recipe
     def on_scale_clicked(self):
-        log.info("Scaling recipe...")
-        # 1. Ask the view (MainWindow) for the target weight
-        target_weight, ok = self.view.get_scale_input()
+        target_weight = self.view.recipe_tab.scale_spinbox.value()
+        # Get the current unit (e.g., 'ounces')
+        current_unit = self.calculator.unit_system
 
-        if ok:
-            # 2. Tell the Calculator to do the math
-            self.calculator.scale_to_weight(target_weight)
+        if target_weight > 0:
+            # Convert the user's input (oz/lbs) into grams for the calculator
+            target_in_grams = self.calculator.convert_to_grams(target_weight, current_unit)
 
-            # 3. Tell the Window to refresh everything
+            self.calculator.scale_recipe(target_in_grams)
             self.view.on_recipe_modified()
-            log.info(f"Recipe successfully scaled to {target_weight}")
+
     #Save Recipe
     def on_save_clicked(self):
             log.info("Save recipe initiated using RecipeManager")

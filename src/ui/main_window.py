@@ -31,13 +31,13 @@ from src.models.cost_manager import CostManager
 from .theme_manager import ThemeManager
 # 5. UI Components (Relative imports)
 from .batch_history import BatchHistoryWidget
-from .tabs.business_tab import ProfitAnalysisWidget
+#from .tabs.business_tab import ProfitAnalysisWidget
 from .tabs.inventory_tab import InventoryCostWidget
 from .tabs.mold_volume_tab import MoldVolumeWidget
 from .tabs.fatty_acid_tab import FABreakdownWidget
 from .tabs.report_tab import RecipeReportWidget
 from .tabs.settings_tab import SettingsWidget
-from .tabs.recipe_tab import RecipeTab
+from .tabs.recipe_tab import RecipeTab, FragranceWidget
 
 #LOGGER
 from src.utils.logger import log
@@ -83,11 +83,12 @@ class MainWindow(QMainWindow):
             self.additive_widget = self.recipe_tab.additive_widget
             self.additives_table = self.recipe_tab.additives_table
             self.fragrance_widget = self.recipe_tab.fragrance_widget
+            self.fragrance_widget.fragrance_added.connect(self.controller.update_calculations)
             self.results_widget = self.recipe_tab.results_widget
             self.product_type_combo = self.recipe_tab.product_type_combo
             self.scale_label = self.recipe_tab.scale_label
             self.scale_spinbox = self.recipe_tab.scale_spinbox
-
+            self.calculator.total_batch_weight = 32.0
             # 5. SAFE STARTUP SEQUENCE
             # First: Connect the wires
             self.connect_signals()
@@ -106,44 +107,6 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         """Setup the user interface"""
         central_widget = QWidget()
-        self.setStyleSheet(
-            """
-    QMainWindow {
-        background-color: #1e1e1e; /* Dark slate background */
-    }
-    QLabel {
-        color: #ffffff; /* White text */
-    }
-    QTabWidget::pane {
-        border: 1px solid #444;
-        background: #252526;
-    }
-    QTabBar::tab {
-        background: #333;
-        color: #ccc;
-        padding: 10px;
-        border: 1px solid #444;
-    }
-    QTabBar::tab:selected {
-        background: #00BFFF; /* Ice Blue for active tab */
-        color: black;
-        font-weight: bold;
-    }
-
-    QTableWidget {
-    background-color: #2b2b2b;
-    alternate-background-color: #353535;
-    gridline-color: #444;
-    color: #00BFFF; /* Ice blue text for ingredients */
-    }
-
-    QHeaderView::section {
-    background-color: #444;
-    color: white;
-    font-weight: bold;
-}
-"""
-        )
         self.setCentralWidget(central_widget)
 
         main_layout = QVBoxLayout()
@@ -184,8 +147,8 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.inventory_tab, "Inventory/Cost")
 
         # Business/Profit Tab
-        self.profit_tab = self.create_profit_tab()
-        tabs.addTab(self.profit_tab, "Business / Profit")
+        #self.profit_tab = self.create_profit_tab()
+        #tabs.addTab(self.profit_tab, "Business / Profit")
 
         # Batch History Tab
         self.batch_tab = self.create_batch_tab()
@@ -209,6 +172,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
 
         central_widget.setLayout(main_layout)
+
 
     #Tab Creation Methods
     def create_settings_tab(self):
@@ -259,14 +223,14 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
 
-    def create_profit_tab(self):
-        """Create the business profit analysis tab"""
-        tab = QWidget()
-        layout = QVBoxLayout()
-        self.profit_widget = ProfitAnalysisWidget()
-        layout.addWidget(self.profit_widget)
-        tab.setLayout(layout)
-        return tab
+
+    #def create_profit_tab(self):
+        """Create the business profit analysis tab without extra containers"""
+        #if not hasattr(self, 'profit_widget'):
+            #self.profit_widget = ProfitAnalysisWidget()
+        #return self.profit_widget
+
+
 
     def create_batch_tab(self):
         """Create the batch history tab"""
@@ -291,8 +255,6 @@ class MainWindow(QMainWindow):
             self.oil_input.oil_added.connect(self.on_recipe_modified)
             self.additive_input.additive_added.connect(self.on_recipe_modified)
             self.recipe_tab.recipe_settings.parameters_changed.connect(self.on_recipe_modified)
-            self.inventory_widget.costs_changed.connect(self.on_recipe_modified)
-
             # Section 3: Specialized Data Handling
             # Cell edits are sent to the controller to validate numbers (g vs %)
             self.oils_table.cellChanged.connect(self.controller.on_oil_cell_changed)
@@ -306,13 +268,18 @@ class MainWindow(QMainWindow):
             self.settings_widget.unit_text_changed.connect(self.update_scale_label)
             self.settings_widget.unit_text_changed.connect(self.update_oils_table_headers)
             self.settings_widget.settings_changed.connect(self.on_settings_modified)
-
             # Section 5: Buttons (The Action Center)
             self.recipe_tab.new_btn.clicked.connect(self.on_new_clicked)
             self.recipe_tab.save_btn.clicked.connect(self.controller.perform_save) # Direct to the save logic
             self.recipe_tab.load_btn.clicked.connect(self.controller.on_load_clicked) # Triggers file dialog
             self.recipe_tab.scale_btn.clicked.connect(self.controller.on_scale_clicked)
             self.recipe_tab.log_btn.clicked.connect(self.log_batch)
+            # Connect the oil input widget to the refresh functions
+            self.oil_input_widget.oil_added.connect(self.update_oils_table)
+            self.oil_input_widget.oil_added.connect(self.update_results)
+            self.oil_input_widget.target_weight_callback = lambda: self.calculator.total_batch_weight
+
+            self.recipe_tab.results_widget.packaging_cost_changed.connect(self.on_packaging_cost_sync)
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
@@ -414,10 +381,13 @@ class MainWindow(QMainWindow):
             print(f"Error updating additives table: {e}")
         finally:
             self._suppress_additives_table_signals = False
+
     def _populate_additive_table(
         self, table: QTableWidget, additives: dict, is_soap: bool
+
     ):
         """Helper to fill an additives table with data."""
+        table.setColumnCount(6)
         self._suppress_additives_table_signals = True
         unit_abbr = self.calculator.get_unit_abbreviation()
         is_skincare = not is_soap
@@ -434,6 +404,7 @@ class MainWindow(QMainWindow):
                 header_pct,
                 "Water Replacement",
                 "Cost",
+                "Action"
             ]
         )
         table.setColumnHidden(3, not is_soap)
@@ -470,67 +441,113 @@ class MainWindow(QMainWindow):
             )
             cost_item = QTableWidgetItem(f"${cost:.2f}")
 
+            # 1. Create the button
+            remove_btn = QPushButton("Remove")
+            remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            # 2. Style it to match your Oil table
+            remove_btn.setStyleSheet("background-color: #444; color: white; border: none; padding: 5px;")
+
             table.setItem(row, 0, name_item)
             table.setItem(row, 1, amt_item)
             table.setItem(row, 2, pct_item)
             table.setItem(row, 3, repl_item)
             table.setItem(row, 4, cost_item)
-
+            table.setCellWidget(row, 5, remove_btn)
+            remove_btn.clicked.connect(lambda checked, btn=remove_btn: self.remove_additive_row(btn))
             for col in range(5):
                 table.item(row, col).setForeground(text_color)
 
         self._suppress_additives_table_signals = False
 
+    def remove_additive_row(self, button):
+        """Safely removes an additive row and updates the recipe math."""
+        # 1. Get a reference to the table in the Recipe Tab
+        table = self.recipe_tab.additives_table
+
+        # 2. Find the row index by checking which cell holds this specific button
+        target_row = -1
+        for row in range(table.rowCount()):
+            if table.cellWidget(row, 5) == button:
+                target_row = row
+                break
+
+        # 3. If we found the row, proceed with deletion
+        if target_row != -1:
+            # Get the name from the first column to remove it from the data model
+            name_item = table.item(target_row, 0)
+            if name_item:
+                additive_name = name_item.text()
+
+                # Remove from the actual Calculator's data so the cost drops
+                if additive_name in self.recipe_tab.calculator.additives:
+                    del self.recipe_tab.calculator.additives[additive_name]
+                    print(f"DEBUG: Removed {additive_name} from data model.")
+
+            # Remove the physical row from the UI table
+            table.removeRow(target_row)
+
+            # 4. TRIGGER THE MATH
+            # We call the calculation function ON THE TAB, not on self (MainWindow)
+            # Based on your logs, this is likely 'calculate_recipe' or 'update_calculations'
+            if hasattr(self.recipe_tab, 'calculate_recipe'):
+                self.recipe_tab.calculate_recipe()
+            elif hasattr(self.recipe_tab, 'update_calculations'):
+                self.recipe_tab.update_calculations()
+
+            print("DEBUG: Additive removed and math refreshed.")
+
     def update_oils_table(self):
-        """Syncs the physical table with the data in self.calculator"""
-        table = self.oils_table
-
-        self._suppress_oils_table_signals = True
-
-
-        try:
-            # Point DIRECTLY to the tab's table to ensure no ghosting
+            """Syncs the physical table with the data in self.calculator"""
             table = self.recipe_tab.oils_table
+            self._suppress_oils_table_signals = True
 
-            # FORCE column count and headers if they are missing
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels(["Oil Name", "Weight", "%","Cost", "Action"])
-            unit = self.calculator.unit_system
-            table.setRowCount(0)
+            try:
+                table.setColumnCount(5)
+                table.setHorizontalHeaderLabels(["Oil Name", "Weight", "%", "Cost", "Action"])
+                table.setRowCount(0)
 
-            self._oils_rows = list(self.calculator.oils.keys())
-            total_weight = self.calculator.get_total_oil_weight()
-            #unit = self.calculator.unit_system
+                unit_sys = self.calculator.unit_system
+                unit_abbr = self.calculator.get_unit_abbreviation()
+                self._oils_rows = list(self.calculator.oils.keys())
+                total_weight = self.calculator.get_total_oil_weight()
 
-            for row, name in enumerate(self._oils_rows):
-                table.insertRow(row)
+                for row, name in enumerate(self._oils_rows):
+                    table.insertRow(row)
 
-                weight_grams = self.calculator.oils.get(name, 0)
-                display_weight = self.calculator.convert_from_grams(weight_grams, unit)
-                percentage = (weight_grams / total_weight * 100) if total_weight > 0 else 0
-                cost_per_g = self.cost_manager.get_cost_per_gram(name)
-                total_cost = weight_grams * cost_per_g
+                    weight_grams = self.calculator.oils.get(name, 0)
+                    display_weight = self.calculator.convert_from_grams(weight_grams, unit_sys)
+                    percentage = (weight_grams / total_weight * 100) if total_weight > 0 else 0
+                    cost_per_g = self.cost_manager.get_cost_per_gram(name)
+                    total_cost = weight_grams * cost_per_g
 
-                # Use str(name) and f-strings to ensure we are passing strings to the table
-                table.setItem(row, 0, QTableWidgetItem(str(name)))
-                table.setItem(row, 1, QTableWidgetItem(f"{display_weight:.2f}"))
-                table.setItem(row, 2, QTableWidgetItem(f"{percentage:.2f}"))
-                table.setItem(row, 3, QTableWidgetItem(f"${total_cost:.2f}"))
-                delete_btn = QPushButton("Remove")
-                # Use a specific style so we know if it's drawing
-                delete_btn.setStyleSheet("background-color: #444; color: white;")
-                delete_btn.clicked.connect(lambda _, n=name: self.handle_remove_oil_by_name(n))
-                table.setCellWidget(row, 4, delete_btn)
+                    # Formatting strings with units/symbols
+                    name_item = QTableWidgetItem(str(name))
+                    weight_item = QTableWidgetItem(f"{display_weight:.2f} {unit_abbr}")
+                    percent_item = QTableWidgetItem(f"{percentage:.2f}%")
+                    cost_item = QTableWidgetItem(f"${total_cost:.2f}")
 
-            # Force the UI to repaint
-            table.viewport().update()
+                    # Optional: Center-align numerical data
+                    for item in [weight_item, percent_item, cost_item]:
+                        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        finally:
-            self._suppress_oils_table_signals = False
-            self.recipe_tab.oils_table.setMinimumHeight(200) # Ensure it's not collapsed
-            self.recipe_tab.oils_table.update()             # Force a repaint
-            self.recipe_tab.oils_table.setVisible(True)      # Just in case
+                    table.setItem(row, 0, name_item)
+                    table.setItem(row, 1, weight_item)
+                    table.setItem(row, 2, percent_item)
+                    table.setItem(row, 3, cost_item)
 
+                    delete_btn = QPushButton("Remove")
+                    delete_btn.setStyleSheet("background-color: #444; color: white; border: none; padding: 5px;")
+                    delete_btn.clicked.connect(lambda _, n=name: self.handle_remove_oil_by_name(n))
+                    table.setCellWidget(row, 4, delete_btn)
+
+                table.viewport().update()
+
+            finally:
+                self._suppress_oils_table_signals = False
+                table.setMinimumHeight(200)
+                table.update()
+                table.setVisible(True)
 
     def update_oils_table_headers(self):
         """Update table headers with current unit"""
@@ -573,18 +590,43 @@ class MainWindow(QMainWindow):
             label_text = "Total Oil Weight"
 
         self.scale_label.setText(f"{label_text} ({unit_abbr}):")
-
     def get_target_batch_weight(self):
         """Get target batch weight in grams for percentage calculations"""
         self.scale_spinbox = self.recipe_tab.scale_spinbox  # Map it here
         val = self.scale_spinbox.value()
         return self.calculator.convert_to_grams(val, self.calculator.unit_system)
 
+    #Packaging Cost Section
     def on_packaging_cost_sync(self, cost: float):
-        """Syncs packaging cost from results widget to profit analysis widget."""
-        if hasattr(self, "profit_widget"):
-            self.profit_widget.set_packaging_cost(cost)
+        """Receives cost from Recipe Tab and pushes it"""
+        print(f"Received packaging cost from Recipe Tab: {cost}")
+        self.update_display_totals(cost)
 
+    def update_display_totals(self, pkg_cost: float):
+        print(f"Updating display totals with packaging cost: {pkg_cost}")
+
+        # 2. Get your yield (how many bars)
+        est_yield = self.recipe_tab.results_widget.yield_label.text()
+        print(f"Current estimated yield from results widget: {est_yield}")
+
+        #Convert yield text to a number (strip non-numeric characters)
+        try:
+            est_yield_num = float(''.join(filter(lambda c: c.isdigit() or c == '.', est_yield)))
+            est_yield = est_yield_num
+        except ValueError:
+            print(f"Could not parse estimated yield: {est_yield}. Defaulting to 0.")
+            est_yield = 0
+
+        # 3. Do the math
+        total_pkg_total = pkg_cost * est_yield
+        #new_total_cost = self.recipe_tab.results_widget.get_total_cost() + total_pkg_total
+        #cost_per_unit = new_total_cost / est_yield if est_yield > 0 else 0
+
+        # 4. Force the labels to show the new numbers
+        #self.total_batch_cost_label.setText(f"${new_total_cost:.2f}")
+        #self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
+
+    #Mold Volume Section
     def on_mold_weight_calculated(self, grams):
         """Handle weight calculated from mold tab"""
         self.scale_spinbox = self.recipe_tab.scale_spinbox  # Map it here
@@ -629,6 +671,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"Recipe scaled to {new_target_weight}{unit_abbr}"
             )
+
 
     # --- Batch & Recipe Operations ---
     def log_batch(self):
@@ -749,11 +792,16 @@ class MainWindow(QMainWindow):
 
         # 3. Reset the recipe object
         self.current_recipe = Recipe()
+        # Set default target oil weight to 32oz (or equivalent in grams) for the new recipe
+        self.calculator.total_batch_weight = 32.0
+        if hasattr(self, "results_widget"):
+            self.update_results()
 
+        log.debug("New recipe initialized with 32oz default target.")
         # 4. Reload defaults (this updates results and UI tables)
         self.load_preferences()
         self.update_oils_table()
-
+        self.update_results()
         log.debug("New recipe initialized with default preferences. Refreshing UI.")
         self.statusBar().showMessage("New recipe created.")
 
@@ -917,11 +965,24 @@ class MainWindow(QMainWindow):
     def handle_remove_oil_by_name(self, name):
             """Specifically for the 'Remove' buttons in the table"""
             # 1. Tell the controller to kill it by name
-            self.controller.remove_oil(name)
+            self.calculator.remove_oil(name)
 
             # 2. Refresh everything
             self.update_oils_table()
             self.update_results()
+
+    def handle_remove_additive_by_name(self, name):
+            """Specifically for the 'Remove' buttons in the table"""
+            # 1. Tell the controller to kill it by name
+            self.remove_additive(name)
+
+            # 2. Refresh everything
+            self.update_oils_table()
+            self.update_results()
+    def remove_additive(self, name):
+        """Remove additive by name"""
+        print(f"Attempting to remove additive: {name}")
+
 
     def remove_selected_additive(self, table: QTableWidget):
         """Remove selected additive"""
@@ -989,6 +1050,7 @@ class MainWindow(QMainWindow):
             finally:
                 # 3. UNLOCK THE DOOR
                 self._is_refreshing = False
+
     #Master Refresh
     def on_settings_modified(self):
         """Checklist for when the unit system or theme changes"""

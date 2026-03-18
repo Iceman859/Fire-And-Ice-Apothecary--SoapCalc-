@@ -58,12 +58,21 @@ ADDITIVES = {
         "is_water_replacement": False
     }
 }
+FRAGRANCE_OILS = {
+    "Lavender EO": {
+        "description": "Lavender essential oil. Calming floral scent.",
+        "default_percent_of_oils": 3.125
+    }
+}
 
 CUSTOM_ADDITIVES_FILE = "custom_additives.json"
 
 
 def get_all_additive_names():
     return sorted(list(ADDITIVES.keys()))
+
+def get_all_fragrance_names():
+    return sorted(list(FRAGRANCE_OILS.keys()))
 
 
 def get_additive_info(name: str) -> dict:
@@ -73,7 +82,7 @@ def get_additive_info(name: str) -> dict:
 def add_additive_entry(name: str, info: dict):
     """Add or update an additive entry in the ADDITIVES DB."""
     ADDITIVES[name] = info
-    
+
     # Load existing custom additives
     custom_additives = {}
     if os.path.exists(CUSTOM_ADDITIVES_FILE):
@@ -82,9 +91,9 @@ def add_additive_entry(name: str, info: dict):
                 custom_additives = json.load(f)
         except Exception:
             pass
-    
+
     custom_additives[name] = info
-    
+
     try:
         with open(CUSTOM_ADDITIVES_FILE, 'w') as f:
             json.dump(custom_additives, f, indent=4)
@@ -95,7 +104,7 @@ def add_additive_entry(name: str, info: dict):
 def remove_additive_entry(name: str):
     if name in ADDITIVES:
         del ADDITIVES[name]
-        
+
     custom_additives = {}
     if os.path.exists(CUSTOM_ADDITIVES_FILE):
         try:
@@ -103,7 +112,7 @@ def remove_additive_entry(name: str):
                 custom_additives = json.load(f)
         except Exception:
             pass
-            
+
     if name in custom_additives:
         del custom_additives[name]
         try:

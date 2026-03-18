@@ -1,5 +1,167 @@
 [
     {
+        "id": "382829ea-8043-4067-b37c-5397c2f231f5",
+        "lot_number": "20260317-7616",
+        "recipe_name": "Berry Silk",
+        "date_made": "2026-03-17",
+        "cure_date": "2026-04-14",
+        "status": "Curing",
+        "total_weight": 38.73,
+        "recipe_snapshot": {
+            "oils": {
+                "Shea Butter": 181.4368,
+                "Olive Oil": 408.2328,
+                "Coconut Oil": 272.1552,
+                "Castor Oil": 45.359199999999994
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 0.5,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "ratio",
+            "water_percent": 38.0,
+            "lye_concentration": 27.0,
+            "properties": {
+                "total_oil_weight": 32.0,
+                "lye_weight": 4.489,
+                "water_weight": 2.24,
+                "total_batch_weight": 38.73,
+                "lye_percentage": 14.03,
+                "water_percentage": 7.01,
+                "fa_breakdown": {
+                    "lauric": 14.4,
+                    "myristic": 5.7,
+                    "palmitic": 10.0,
+                    "stearic": 10.25,
+                    "oleic": 43.25,
+                    "linoleic": 7.4,
+                    "linolenic": 0.45,
+                    "ricinoleic": 4.5
+                },
+                "relative_qualities": {
+                    "hardness": 40.349999999999994,
+                    "cleansing": 20.099999999999998,
+                    "bubbly": 24.599999999999998,
+                    "creamy": 24.75,
+                    "conditioning": 55.6,
+                    "iodine": 57.349999999999994,
+                    "ins": 152.6
+                },
+                "unit_system": "oz"
+            },
+            "name": "Berry Silk"
+        },
+        "notes": ""
+    },
+    {
+        "id": "fda655c6-d8ae-47c4-95bd-32aa40381e61",
+        "lot_number": "20260317-EF48",
+        "recipe_name": "Tobacco And Bay Leaf",
+        "date_made": "2026-03-17",
+        "cure_date": "2026-04-14",
+        "status": "Curing",
+        "total_weight": 36.49,
+        "recipe_snapshot": {
+            "oils": {
+                "Shea Butter": 181.4368,
+                "Olive Oil": 408.2328,
+                "Coconut Oil": 272.1552,
+                "Castor Oil": 45.359199999999994
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 0.5,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "ratio",
+            "water_percent": 38.0,
+            "lye_concentration": 27.0,
+            "properties": {
+                "total_oil_weight": 32.0,
+                "lye_weight": 4.489,
+                "water_weight": 0.0,
+                "total_batch_weight": 36.49,
+                "lye_percentage": 14.03,
+                "water_percentage": 0.0,
+                "fa_breakdown": {
+                    "lauric": 14.4,
+                    "myristic": 5.7,
+                    "palmitic": 10.0,
+                    "stearic": 10.25,
+                    "oleic": 43.25,
+                    "linoleic": 7.4,
+                    "linolenic": 0.45,
+                    "ricinoleic": 4.5
+                },
+                "relative_qualities": {
+                    "hardness": 40.349999999999994,
+                    "cleansing": 20.099999999999998,
+                    "bubbly": 24.599999999999998,
+                    "creamy": 24.75,
+                    "conditioning": 55.6,
+                    "iodine": 57.349999999999994,
+                    "ins": 152.6
+                },
+                "unit_system": "oz"
+            },
+            "name": "Tobacco And Bay Leaf"
+        },
+        "notes": "[2026-03-17 17:14] In Mold"
+    },
+    {
+        "id": "40365e1d-fe57-476b-8dde-c6e2dc340105",
+        "lot_number": "20260316-EE9F",
+        "recipe_name": "Cool Water Bar",
+        "date_made": "2026-03-16",
+        "cure_date": "2026-04-13",
+        "status": "Curing",
+        "total_weight": 36.49,
+        "recipe_snapshot": {
+            "oils": {
+                "Shea Butter": 181.4368,
+                "Olive Oil": 408.2328,
+                "Coconut Oil": 272.1552,
+                "Castor Oil": 45.359199999999994
+            },
+            "superfat_percent": 5.0,
+            "water_to_lye_ratio": 0.5,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "ratio",
+            "water_percent": 38.0,
+            "lye_concentration": 27.0,
+            "properties": {
+                "total_oil_weight": 32.0,
+                "lye_weight": 4.489,
+                "water_weight": 0.0,
+                "total_batch_weight": 36.49,
+                "lye_percentage": 14.03,
+                "water_percentage": 0.0,
+                "fa_breakdown": {
+                    "lauric": 14.4,
+                    "myristic": 5.7,
+                    "palmitic": 10.0,
+                    "stearic": 10.25,
+                    "oleic": 43.25,
+                    "linoleic": 7.4,
+                    "linolenic": 0.45,
+                    "ricinoleic": 4.5
+                },
+                "relative_qualities": {
+                    "hardness": 40.349999999999994,
+                    "cleansing": 20.099999999999998,
+                    "bubbly": 24.599999999999998,
+                    "creamy": 24.75,
+                    "conditioning": 55.6,
+                    "iodine": 57.349999999999994,
+                    "ins": 152.6
+                },
+                "unit_system": "oz"
+            },
+            "name": "Cool Water Bar"
+        },
+        "notes": "White spots on bar from titanium dioxide\n\n[2026-03-16 06:37] Soap Cut"
+    },
+    {
         "id": "45e7f639-17af-44a9-b350-83696949fd26",
         "lot_number": "20260308-C4AA",
         "recipe_name": "Shea Bar",

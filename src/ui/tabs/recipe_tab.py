@@ -22,7 +22,7 @@ from PyQt6.QtCore import pyqtSignal, Qt
 
 # Data & Logic Imports
 from src.data import get_all_oil_names
-from src.data.additives import get_all_additive_names, get_additive_info
+from src.data.additives import get_all_additive_names, get_additive_info, get_all_fragrance_names
 from src.ui.skincare_ingredients import is_exfoliant as check_is_exfoliant
 from src.models import SoapCalculator
 
@@ -93,7 +93,13 @@ class OilInputWidget(QWidget):
             weight_grams = 0.0
             if unit == "%":
                 if self.target_weight_callback:
-                    total_grams = self.target_weight_callback()
+                    # This will now get 32.0 from our new_recipe default
+                    target_val = self.target_weight_callback()
+
+                    # Convert that 32.0 oz to grams so the calculator stays happy
+                    # (32 * 28.3495 = ~907g)
+                    total_grams = self.calculator.convert_to_grams(target_val, "ounces")
+
                     weight_grams = total_grams * (weight / 100.0)
             else:
                 unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
@@ -167,7 +173,7 @@ class AdditiveInputWidget(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        self.group = QGroupBox("Additives & Water Replacement", self)
+        self.group = QGroupBox("Additives", self)
         layout = QGridLayout(self.group)
 
         layout.addWidget(QLabel("Additive:"), 0, 0)
@@ -288,7 +294,6 @@ class AdditiveInputWidget(QWidget):
 
 class FragranceWidget(QWidget):
     """Widget to calculate fragrance amount based on usage rate"""
-
     fragrance_added = pyqtSignal()
 
     def __init__(self, calculator: SoapCalculator, cost_manager=None, parent=None):
@@ -304,7 +309,7 @@ class FragranceWidget(QWidget):
         layout.addWidget(QLabel("Scent Name:"), 0, 0)
         self.name_combo = QComboBox()
         self.name_combo.setEditable(True)
-        items = ["Lavender EO", "Peppermint EO", "Tea Tree EO", "Fragrance Oil"]
+        items = get_all_fragrance_names()
         self.name_combo.addItems(items)
         self.name_combo.setCurrentIndex(-1)
         layout.addWidget(self.name_combo, 0, 1)
@@ -314,7 +319,9 @@ class FragranceWidget(QWidget):
         self.rate_spin = QDoubleSpinBox()
         self.rate_spin.setRange(0, 10)
         self.rate_spin.setValue(0.50)
+        #probably wrong function for adding fragrance
         self.rate_spin.valueChanged.connect(self.update_calculation)
+
         rate_layout.addWidget(self.rate_spin)
         self.rate_unit_combo = QComboBox()
         self.rate_unit_combo.addItems(["%", "oz/lb", "g/kg"])
@@ -327,7 +334,7 @@ class FragranceWidget(QWidget):
         self.amount_lbl.setStyleSheet("font-weight: bold; color: #4fc3f7;")
         layout.addWidget(self.amount_lbl, 2, 1)
 
-        add_btn = QPushButton("Add to Additives")
+        add_btn = QPushButton("Add Fragrance")
         add_btn.clicked.connect(self.add_fragrance)
         layout.addWidget(add_btn, 3, 0, 1, 2)
 
@@ -347,10 +354,44 @@ class FragranceWidget(QWidget):
         )
 
     def add_fragrance(self):
-        name = self.name_combo.currentText() or "Fragrance"
-        # Logic to calculate amount_grams omitted for brevity
-        self.calculator.add_additive(name, 10.0)
-        self.fragrance_added.emit()
+            """Calculates fragrance amount in base units (grams) and adds to the recipe"""
+            scent_name = self.name_combo.currentText()
+            if not scent_name:
+                # Optionally: self.show_error("Please select or enter a scent name")
+                return
+
+            usage_rate = self.rate_spin.value()
+            unit_type = self.rate_unit_combo.currentText()
+
+            # We assume get_total_oil_weight() returns the base mass in Grams
+            total_oil_base = self.calculator.get_total_oil_weight()
+
+            if total_oil_base <= 0:
+                return
+
+            # --- CALCULATION LOGIC (RATIO BASED) ---
+            # We calculate the amount in the same unit as total_oil_base (Grams)
+            if unit_type == "%":
+                # Ratio: Part per 100
+                amount_base = (usage_rate / 100) * total_oil_base
+
+            elif unit_type == "oz/lb":
+                # Ratio: 1 part per 16 parts (Standard Fragrance Math)
+                # This is mathematically identical to (usage_rate / 16) * total_oil
+                amount_base = (usage_rate / 16) * total_oil_base
+
+            elif unit_type == "g/kg":
+                # Ratio: 1 part per 1000 parts
+                amount_base = (usage_rate / 1000) * total_oil_base
+            else:
+                amount_base = 0
+
+            # 4. Send the Base Grams to the calculator.
+            self.calculator.add_additive(scent_name, amount_base)
+
+            # 5. Trigger the UI refresh
+            self.fragrance_added.emit()
+            self.name_combo.setCurrentIndex(-1)
 
     def refresh_ingredients(self):
         pass
@@ -412,17 +453,18 @@ class CalculationResultsWidget(QWidget):
 
         layout.addWidget(self.weights_group)
 
+        # Yield Estimation
         self.yield_group = QGroupBox("Yield Estimation")
         y_layout = QGridLayout(self.yield_group)
         self.bar_size_spin = QDoubleSpinBox()
         self.bar_size_spin.setRange(0.1, 5000)
         self.bar_size_spin.setValue(4.5)
-        y_layout.addWidget(QLabel("Container Size:"), 0, 0)
+        y_layout.addWidget(QLabel("Bar Size:"), 0, 0)
         y_layout.addWidget(self.bar_size_spin, 0, 1)
-        self.packaging_cost_spin = QDoubleSpinBox()
-        self.packaging_cost_spin.setRange(0, 100)
+        self.ypacking_cost_spin = QDoubleSpinBox()
+        self.ypacking_cost_spin.setRange(0, 100)
         y_layout.addWidget(QLabel("Packaging Cost:"), 1, 0)
-        y_layout.addWidget(self.packaging_cost_spin, 1, 1)
+        y_layout.addWidget(self.ypacking_cost_spin, 1, 1)
         self.yield_label = QLabel("0.0 units")
         y_layout.addWidget(QLabel("Est. Yield:"), 2, 0)
         y_layout.addWidget(self.yield_label, 2, 1)
@@ -430,6 +472,10 @@ class CalculationResultsWidget(QWidget):
         y_layout.addWidget(QLabel("Cost/Unit:"), 3, 0)
         y_layout.addWidget(self.cost_per_unit_label, 3, 1)
         layout.addWidget(self.yield_group)
+        self.bar_size_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
+        self.ypacking_cost_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
+        self.ypacking_cost_spin.valueChanged.connect(self.on_packaging_cost_changed)
+
 
     def on_packaging_cost_changed(self, value):
         self.packaging_cost_changed.emit(value)
@@ -438,44 +484,62 @@ class CalculationResultsWidget(QWidget):
         self.mode = mode
 
     def update_display(self, results):
-        """Receives calculations and updates the labels on the screen."""
-        # 1. Clean up the unit abbreviation
-        unit = results.get('unit_system', 'g').lower()
-        if unit == "ounces": unit = "oz"
-        if unit == "grams": unit = "g"
+            """Receives calculations and updates the labels on the screen."""
 
-        # 2. Update the Recipe Name Header
-        # This is what replaces 'Unsaved Recipe' with your actual filename
-        recipe_name = results.get('recipe_name', 'Unsaved Recipe')
-        self.recipe_name_label.setText(recipe_name)
+            if not results:
+                return
 
-        # 3. Precise Mapping
-        # Keys on the LEFT must match your 'weight_keys' from setup_ui exactly.
-        # Keys on the RIGHT must match what the SoapCalculator actually outputs.
-        mapping = {
-            "Total Oil Weight": "total_oil_weight",
-            "Water Weight": "water_weight",
-            "Lye Weight": "lye_weight",
-            "Total Batch Weight": "total_batch_weight",
-            "Total Batch Cost": "total_batch_cost"
-        }
+    # CRITICAL: Save the results so the spinbox can use them later
+            self.last_properties = results
 
-        # 4. Update the labels inside the weight_labels dictionary
-        for ui_label_text, data_key in mapping.items():
-            if ui_label_text in self.weight_labels:
-                value = results.get(data_key, 0.0)
+            unit = results.get('unit_system', 'g').lower()
+            if unit == "ounces": unit = "oz"
+            if unit == "grams": unit = "g"
 
-                # Format based on whether it's a cost or a weight
-                if "Cost" in ui_label_text:
-                    self.weight_labels[ui_label_text].setText(f"${value:.2f}")
-                else:
-                    self.weight_labels[ui_label_text].setText(f"{value:.2f} {unit}")
+            # --- NEW MATH START ---
+            # 1. Calculate Cost (Iterate through what's in the calculator)
+            total_cost = 0.0
+            if self.cost_manager and self.calculator:
+                # Sum Oils
+                for name, weight in self.calculator.oils.items():
+                    total_cost += (weight * self.cost_manager.get_cost_per_gram(name))
+                # Sum Additives
+                for name, weight in self.calculator.additives.items():
+                    total_cost += (weight * self.cost_manager.get_cost_per_gram(name))
 
-        # 5. Handle Yield Estimation (Container Size)
-        # This ensures your yield updates when you change container sizes
-        if hasattr(self, 'yield_label'):
-            yield_val = results.get('yield', 0.0)
-            self.yield_label.setText(f"{yield_val:.1f} units")
+            # 2. Calculate Yield
+            total_weight = results.get('total_batch_weight', 0.0)
+            container_size = self.bar_size_spin.value()
+            est_yield = total_weight / container_size if container_size > 0 else 0.0
+
+            # Inject these into the results so the mapping below finds them
+            results['total_batch_cost'] = total_cost
+            results['yield'] = est_yield
+            # --- NEW MATH END ---
+
+            # ... (Keep your existing mapping and loop below) ...
+            mapping = {
+                "Total Oil Weight": "total_oil_weight",
+                "Water Weight": "water_weight",
+                "Lye Weight": "lye_weight",
+                "Total Batch Weight": "total_batch_weight",
+                "Total Batch Cost": "total_batch_cost" # Now it will find the value!
+            }
+
+            for ui_label_text, data_key in mapping.items():
+                if ui_label_text in self.weight_labels:
+                    value = results.get(data_key, 0.0)
+                    if "Cost" in ui_label_text:
+                        self.weight_labels[ui_label_text].setText(f"${value:.2f}")
+                    else:
+                        self.weight_labels[ui_label_text].setText(f"{value:.2f} {unit}")
+
+            # Update Yield Label
+            self.yield_label.setText(f"{est_yield:.1f} units")
+
+            # Update Cost Per Unit
+            cost_per_unit = total_cost / est_yield if est_yield > 0 else 0.0
+            self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
 
     def update_units(self, unit_text):
         """Update the unit labels in the results display"""
@@ -488,6 +552,7 @@ class CalculationResultsWidget(QWidget):
         # If you want to update the 'per unit' label (e.g., $/oz)
         if hasattr(self, 'cost_per_unit_label'):
             self.cost_per_unit_label.setText(f"Cost per {unit_text}")
+
 
 class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
@@ -560,13 +625,13 @@ class RecipeNotesWidget(QWidget):
 
 class RecipeTab(QWidget):
     """Main tab for recipe creation and calculations"""
-
     def __init__(self, calculator, cost_manager, recipe_controller, parent=None):
         super().__init__(parent)
         self.calculator = calculator
         self.cost_manager = cost_manager
         self.controller = recipe_controller
         self.notes_widget = RecipeNotesWidget()
+        self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
         self.setup_ui()
 
     def setup_ui(self):
@@ -598,7 +663,6 @@ class RecipeTab(QWidget):
             col1_vbox.addWidget(QLabel("<b>Recipe Parameters</b>"))
             col1_vbox.addWidget(self.recipe_settings)
 
-            # Integrated Notes Widget
             col1_vbox.addSpacing(20)
             col1_vbox.addWidget(QLabel("<b>Process Notes</b>"))
             col1_vbox.addWidget(self.notes_widget)
@@ -615,6 +679,8 @@ class RecipeTab(QWidget):
 
             soap_page = QWidget()
             soap_layout = QVBoxLayout(soap_page)
+
+            # Oil Input Section
             self.oil_input_widget = OilInputWidget(
                 self.calculator,
                 mode="soap",
@@ -630,23 +696,36 @@ class RecipeTab(QWidget):
             self.oils_table.setMinimumHeight(350)
             soap_layout.addWidget(self.oils_table)
 
+            # --- THE SIDE-BY-SIDE SECTION ---
+            soap_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
+
+            # Create horizontal container
+            input_row_layout = QHBoxLayout()
+            input_row_layout.setSpacing(10)
+
             self.fragrance_widget = FragranceWidget(
                 self.calculator, cost_manager=self.cost_manager, parent=self
             )
             self.additive_widget = AdditiveInputWidget(
                 self.calculator, cost_manager=self.cost_manager, parent=self
             )
-            self.additives_table = QTableWidget()
-            self.additives_table.setColumnCount(5)
-            self.additives_table.setMinimumHeight(200)
 
-            soap_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
-            soap_layout.addWidget(self.fragrance_widget)
-            soap_layout.addWidget(self.additive_widget)
+            # Add widgets to the horizontal row with equal stretch
+            input_row_layout.addWidget(self.fragrance_widget, 1)
+            input_row_layout.addWidget(self.additive_widget, 1)
+
+            # Add the horizontal row to the soap layout
+            soap_layout.addLayout(input_row_layout)
+
+            # Additives Table (Below the inputs)
+            self.additives_table = QTableWidget()
+            self.additives_table.setColumnCount(6) # Updated to 6 for the Action/Remove column
+            self.additives_table.setMinimumHeight(200)
             soap_layout.addWidget(self.additives_table)
 
             self.middle_stack.addWidget(soap_page)
-            self.middle_stack.addWidget(QWidget()) # Placeholder for other modes
+            self.middle_stack.addWidget(QWidget()) # Placeholder
+
             col2_vbox.addWidget(self.middle_stack)
             col2_container.setLayout(col2_vbox)
             col2_scroll.setWidget(col2_container)
@@ -705,6 +784,9 @@ class RecipeTab(QWidget):
             if hasattr(self, 'scale_label'):
                 self.scale_label.setText(f"Total Oil Weight ({unit_text}):")
 
+            if hasattr(self, 'scale_total_weight'):
+                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
+
             # 2. Sync the oil input unit selector so it matches the new setting
             if hasattr(self, 'oil_input_widget'):
                 self.oil_input_widget.set_unit_system(unit_text.lower())
@@ -714,3 +796,34 @@ class RecipeTab(QWidget):
             # how to talk to both the calculator and the results_widget.
             if hasattr(self, 'controller'):
                 self.controller.update_calculations()
+
+            #Total Batch scale
+            if hasattr(self, 'scale_total_weighgt'):
+                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
+
+class AdditivesSection(QWidget):
+    """A container that holds Fragrance and Additives side-by-side"""
+    def __init__(self, calculator, cost_manager=None, parent=None):
+        super().__init__(parent)
+        self.calculator = calculator
+        self.cost_manager = cost_manager
+        self.setup_ui()
+
+    def setup_ui(self):
+        # 1. Create the horizontal layout
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(15)
+
+        # 2. Initialize the two specific widgets
+        self.fragrance_calc = FragranceWidget(self.calculator, self.cost_manager)
+        self.additives_input = AdditiveInputWidget(self.calculator, self.cost_manager)
+
+        # 3. Add them to the layout with equal stretch (1, 1)
+        self.main_layout.addWidget(self.fragrance_calc, 1)
+        self.main_layout.addWidget(self.additives_input, 1)
+
+    def refresh(self):
+        """If you need them to 'talk', you can trigger updates here"""
+        self.fragrance_calc.update_calculation()
+        self.additives_input.refresh_additives()
