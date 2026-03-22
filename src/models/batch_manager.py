@@ -8,7 +8,7 @@ import uuid
 
 class BatchManager:
     """Manages production batches and cure dates"""
-    
+
     def __init__(self, filepath="batches.json"):
         self.filepath = filepath
         self.batches = []
@@ -19,15 +19,23 @@ class BatchManager:
             try:
                 with open(self.filepath, 'r') as f:
                     self.batches = json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                print(f"Error loading batches: {e}")
                 self.batches = []
 
     def save_batches(self):
+        temp_path = f"{self.filepath}.tmp"
         try:
-            with open(self.filepath, 'w') as f:
+            with open(temp_path, 'w') as f:
                 json.dump(self.batches, f, indent=4)
-        except Exception as e:
+            os.replace(temp_path, self.filepath)
+        except (IOError, OSError) as e:
             print(f"Error saving batches: {e}")
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
     def create_batch(self, recipe_data, notes=""):
         """Create a new batch entry from a recipe"""
@@ -35,7 +43,7 @@ class BatchManager:
         date_str = datetime.now().strftime("%Y%m%d")
         short_id = str(uuid.uuid4())[:4].upper()
         lot_number = f"{date_str}-{short_id}"
-        
+
         batch = {
             "id": str(uuid.uuid4()),
             "lot_number": lot_number,
@@ -55,7 +63,7 @@ class BatchManager:
     def delete_batch(self, batch_id):
         self.batches = [b for b in self.batches if b["id"] != batch_id]
         self.save_batches()
-        
+
     def update_status(self, batch_id, status):
         for b in self.batches:
             if b["id"] == batch_id:

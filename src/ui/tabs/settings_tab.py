@@ -13,8 +13,9 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QLineEdit,
 )
-
+from src.utils.logger import log
 from src.models import SoapCalculator
+
 
 
 class SettingsWidget(QWidget):

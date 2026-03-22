@@ -19,13 +19,13 @@ from PyQt6.QtWidgets import (
     QTextEdit,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
-
+from PyQt6.QtWidgets import QHeaderView
 # Data & Logic Imports
 from src.data import get_all_oil_names
 from src.data.additives import get_all_additive_names, get_additive_info, get_all_fragrance_names
-from src.ui.skincare_ingredients import is_exfoliant as check_is_exfoliant
 from src.models import SoapCalculator
-
+from src.utils.logger import log
+from src.models.cost_manager import CostManager
 
 class OilInputWidget(QWidget):
     """Widget for adding oils to recipe"""
@@ -160,7 +160,6 @@ class OilInputWidget(QWidget):
     # Since the calculator brain is shared, we can just return
     # the oils currently stored in the calculator it was initialized with.
         return self.calculator.oils
-
 class AdditiveInputWidget(QWidget):
     """Widget for adding recipe additives"""
 
@@ -290,8 +289,6 @@ class AdditiveInputWidget(QWidget):
             names = sorted(list(set(names + inventory_items)))
         self.add_combo.addItems(names)
         self.add_combo.setCurrentText(current)
-
-
 class FragranceWidget(QWidget):
     """Widget to calculate fragrance amount based on usage rate"""
     fragrance_added = pyqtSignal()
@@ -395,8 +392,6 @@ class FragranceWidget(QWidget):
 
     def refresh_ingredients(self):
         pass
-
-
 class CalculationResultsWidget(QWidget):
     """Widget for displaying calculation results"""
 
@@ -405,7 +400,7 @@ class CalculationResultsWidget(QWidget):
     def __init__(
         self,
         calculator: SoapCalculator = None,
-        cost_manager=None,
+        cost_manager= CostManager,
         mode: str = "soap",
         parent=None,
     ):
@@ -452,7 +447,6 @@ class CalculationResultsWidget(QWidget):
             self.row_widgets[key] = (lbl, val_lbl)
 
         layout.addWidget(self.weights_group)
-
         # Yield Estimation
         self.yield_group = QGroupBox("Yield Estimation")
         y_layout = QGridLayout(self.yield_group)
@@ -461,8 +455,10 @@ class CalculationResultsWidget(QWidget):
         self.bar_size_spin.setValue(4.5)
         y_layout.addWidget(QLabel("Bar Size:"), 0, 0)
         y_layout.addWidget(self.bar_size_spin, 0, 1)
+        self.bar_size_spin.setSingleStep(0.25)
         self.ypacking_cost_spin = QDoubleSpinBox()
         self.ypacking_cost_spin.setRange(0, 100)
+        self.ypacking_cost_spin.setSingleStep(0.10)
         y_layout.addWidget(QLabel("Packaging Cost:"), 1, 0)
         y_layout.addWidget(self.ypacking_cost_spin, 1, 1)
         self.yield_label = QLabel("0.0 units")
@@ -475,7 +471,31 @@ class CalculationResultsWidget(QWidget):
         self.bar_size_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
         self.ypacking_cost_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
         self.ypacking_cost_spin.valueChanged.connect(self.on_packaging_cost_changed)
+            #LYE WARNING LABEL
+        self.status_label = QLabel("Waiting for calculation...")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_label)
 
+        # Masterbatch UI - Add to the existing w_layout (Batch Weights group)
+        next_row = 7
+
+        self.mb_pour_label = QLabel("Liquid Lye (50/50):")
+        self.mb_pour_value = QLabel("0.00 oz")
+        self.mb_pour_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        w_layout.addWidget(self.mb_pour_label, next_row, 0)
+        w_layout.addWidget(self.mb_pour_value, next_row, 1)
+
+        self.extra_water_label = QLabel("Add'l Water to Oils:")
+        self.extra_water_value = QLabel("0.00 oz")
+        self.extra_water_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        w_layout.addWidget(self.extra_water_label, next_row + 1, 0)
+        w_layout.addWidget(self.extra_water_value, next_row + 1, 1)
+
+        # Hide them by default
+        self.mb_pour_label.setVisible(False)
+        self.mb_pour_value.setVisible(False)
+        self.extra_water_label.setVisible(False)
+        self.extra_water_value.setVisible(False)
 
     def on_packaging_cost_changed(self, value):
         self.packaging_cost_changed.emit(value)
@@ -484,62 +504,53 @@ class CalculationResultsWidget(QWidget):
         self.mode = mode
 
     def update_display(self, results):
-            """Receives calculations and updates the labels on the screen."""
+        """Receives pre-calculated data and updates labels on screen."""
+        if not results:
+            log.debug("No Results")
+            return
 
-            if not results:
-                return
+        # Store for future reference
+        self.last_properties = results
+        unit = results.get('unit_system_abbr', 'g')
 
-    # CRITICAL: Save the results so the spinbox can use them later
-            self.last_properties = results
+        # Mapping UI Label strings to dictionary keys
+        mapping = {
+            "Total Oil Weight": "total_oil_weight",
+            "Water Weight": "water_weight",
+            "Lye Weight": "lye_weight",
+            "Total Batch Weight": "total_batch_weight",
+            "Total Batch Cost": "total_batch_cost"
+        }
 
-            unit = results.get('unit_system', 'g').lower()
-            if unit == "ounces": unit = "oz"
-            if unit == "grams": unit = "g"
+        # Update standard weight/cost labels
+        for ui_label_text, data_key in mapping.items():
+            if ui_label_text in self.weight_labels:
+                value = results.get(data_key, 0.0)
+                if "Cost" in ui_label_text:
+                    self.weight_labels[ui_label_text].setText(f"${value:.2f}")
+                else:
+                    self.weight_labels[ui_label_text].setText(f"{value:.2f} {unit}")
 
-            # --- NEW MATH START ---
-            # 1. Calculate Cost (Iterate through what's in the calculator)
-            total_cost = 0.0
-            if self.cost_manager and self.calculator:
-                # Sum Oils
-                for name, weight in self.calculator.oils.items():
-                    total_cost += (weight * self.cost_manager.get_cost_per_gram(name))
-                # Sum Additives
-                for name, weight in self.calculator.additives.items():
-                    total_cost += (weight * self.cost_manager.get_cost_per_gram(name))
+        # --- MASTERBATCH UI ---
+        is_mb = results.get('is_masterbatch', False)
+        for widget in [self.mb_pour_label, self.mb_pour_value,
+                    self.extra_water_label, self.extra_water_value]:
+            widget.setVisible(is_mb)
 
-            # 2. Calculate Yield
-            total_weight = results.get('total_batch_weight', 0.0)
-            container_size = self.bar_size_spin.value()
-            est_yield = total_weight / container_size if container_size > 0 else 0.0
+        if is_mb:
+            mb_pour = results.get('mb_liquid_pour', 0.0)
+            extra_w = results.get('extra_water_to_add', 0.0)
+            self.mb_pour_value.setText(f"{mb_pour:.2f} {unit}")
+            self.extra_water_value.setText(f"{extra_w:.2f} {unit}")
 
-            # Inject these into the results so the mapping below finds them
-            results['total_batch_cost'] = total_cost
-            results['yield'] = est_yield
-            # --- NEW MATH END ---
+        # --- YIELD & UNIT COST ---
+        est_yield = results.get('yield', 0.0)
+        total_cost = results.get('total_batch_cost', 0.0)
 
-            # ... (Keep your existing mapping and loop below) ...
-            mapping = {
-                "Total Oil Weight": "total_oil_weight",
-                "Water Weight": "water_weight",
-                "Lye Weight": "lye_weight",
-                "Total Batch Weight": "total_batch_weight",
-                "Total Batch Cost": "total_batch_cost" # Now it will find the value!
-            }
+        self.yield_label.setText(f"{est_yield:.1f} units")
 
-            for ui_label_text, data_key in mapping.items():
-                if ui_label_text in self.weight_labels:
-                    value = results.get(data_key, 0.0)
-                    if "Cost" in ui_label_text:
-                        self.weight_labels[ui_label_text].setText(f"${value:.2f}")
-                    else:
-                        self.weight_labels[ui_label_text].setText(f"{value:.2f} {unit}")
-
-            # Update Yield Label
-            self.yield_label.setText(f"{est_yield:.1f} units")
-
-            # Update Cost Per Unit
-            cost_per_unit = total_cost / est_yield if est_yield > 0 else 0.0
-            self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
+        cost_per_unit = total_cost / est_yield if est_yield > 0 else 0.0
+        self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
 
     def update_units(self, unit_text):
         """Update the unit labels in the results display"""
@@ -553,10 +564,22 @@ class CalculationResultsWidget(QWidget):
         if hasattr(self, 'cost_per_unit_label'):
             self.cost_per_unit_label.setText(f"Cost per {unit_text}")
 
-
+    def update_solution_warning(self, concentration: float):
+        # concentration is 50.0 for a 1:1 Masterbatch
+        if concentration > 51.0:
+            self.status_label.setText("[!] Supersaturated / Danger")
+            self.status_label.setStyleSheet("color: #ff4444; font-weight: bold;")
+        elif concentration >= 50.0:
+            self.status_label.setText("Standard 50/50 Masterbatch")
+            self.status_label.setStyleSheet("color: #00c851; font-weight: bold;") # Green for you
+        elif concentration >= 33.0:
+            self.status_label.setText("Diluted Solution")
+            self.status_label.setStyleSheet("color: #33b5e5; font-weight: normal;")
+        else:
+            self.status_label.setText("High Water Content")
+            self.status_label.setStyleSheet("color: #ffbb33; font-weight: normal;")
 class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
-
     parameters_changed = pyqtSignal()
 
     def __init__(self, calculator: SoapCalculator, parent=None):
@@ -578,11 +601,10 @@ class RecipeParametersWidget(QWidget):
         layout.addWidget(QLabel("Superfat %:"))
         layout.addWidget(self.superfat_spinbox)
 
+        self.water_method_label = QLabel("Water Calculation:")
         self.water_method_combo = QComboBox()
-        self.water_method_combo.addItems(
-            ["Water:Lye Ratio", "Water % of Oils", "Lye Concentration"]
-        )
-        layout.addWidget(QLabel("Water Calculation:"))
+        self.water_method_combo.addItems(["Water:Lye Ratio", "Water % of Oils", "Lye Concentration"])
+        layout.addWidget(self.water_method_label)
         layout.addWidget(self.water_method_combo)
 
         self.water_value_spinbox = QDoubleSpinBox()
@@ -590,18 +612,96 @@ class RecipeParametersWidget(QWidget):
         layout.addWidget(self.water_value_label)
         layout.addWidget(self.water_value_spinbox)
 
+        # MASTERBATCH UI - Define them
+        self.masterbatch_check = QCheckBox("Use Masterbatch (50/50)")
+        self.target_conc_label = QLabel("Final Target Conc %:")
+        self.target_conc_spin = QDoubleSpinBox()
+        self.target_conc_spin.setRange(25.0, 50.0)
+        self.target_conc_spin.setValue(33.3)
+
+        # ADD THEM TO THE LAYOUT (Crucial step)
+        layout.addWidget(self.masterbatch_check)
+        layout.addWidget(self.target_conc_label)
+        layout.addWidget(self.target_conc_spin)
+
+        # INITIAL VISIBILITY
+        self.target_conc_label.setVisible(False)
+        self.target_conc_spin.setVisible(False)
+
+        # SIGNALS - Connect the toggle and the spinbox
+        self.masterbatch_check.toggled.connect(self.toggle_masterbatch)
+        self.target_conc_spin.valueChanged.connect(self.parameters_changed.emit)
+
+        #Signals
+        # Add these to the end of your setup_ui function
+        self.lye_combo.currentTextChanged.connect(self.on_lye_type_changed)
+        self.superfat_spinbox.valueChanged.connect(self.on_superfat_changed)
+        self.water_method_combo.currentTextChanged.connect(self.on_water_value_changed)
+        self.water_value_spinbox.valueChanged.connect(self.on_water_value_changed)
+
+
     def on_lye_type_changed(self, lye_type: str):
-        pass
+        self.calculator.set_lye_type(lye_type)
+        self.parameters_changed.emit()
 
     def on_superfat_changed(self):
-        pass
-
-    def on_water_method_changed(self, method_text: str):
-        pass
+        # This sends the 5.0 or 7.0 from the spinbox to the calculator
+        self.calculator.set_superfat(self.superfat_spinbox.value())
+        self.parameters_changed.emit()
 
     def on_water_value_changed(self):
-        pass
+        # Determine what triggered the change
+        sender = self.sender()
 
+        method_text = self.water_method_combo.currentText()
+        mapping = {
+            "Water:Lye Ratio": "ratio",
+            "Water % of Oils": "percent",
+            "Lye Concentration": "concentration"
+        }
+        method = mapping.get(method_text, "ratio")
+
+        if sender is None or sender == self.water_method_combo:
+            # Combo box changed or initialization: update method and sync UI to current calculator values
+            self.calculator.set_water_calc_method(method)  # Set method without changing value
+            # Update label
+            label_mapping = {
+                "ratio": "Ratio:",
+                "percent": "%:",
+                "concentration": "Conc %:"
+            }
+            self.water_value_label.setText(label_mapping.get(method, "Ratio:"))
+            # Update spinbox value to current calculator value
+            if method == "ratio":
+                self.water_value_spinbox.setValue(self.calculator.water_to_lye_ratio)
+            elif method == "percent":
+                self.water_value_spinbox.setValue(self.calculator.water_percent)
+            elif method == "concentration":
+                self.water_value_spinbox.setValue(self.calculator.lye_concentration)
+        elif sender == self.water_value_spinbox:
+            # Spinbox changed: update the value for current method
+            self.calculator.set_water_calc_method(method, self.water_value_spinbox.value())
+
+        self.parameters_changed.emit()
+
+    #masterbatch isable other methods when checked
+    def toggle_masterbatch(self, checked):
+        # Show/Hide the target concentration input
+        self.target_conc_label.setVisible(checked)
+        self.target_conc_spin.setVisible(checked)
+
+        # Disable standard water inputs
+        self.water_method_combo.setVisible(not checked)
+        self.water_value_spinbox.setVisible(not checked)
+        self.water_value_label.setVisible(not checked)
+        self.water_method_label.setVisible(not checked)
+
+
+        # Force calculator to your 50/50 masterbatch concentration
+        if checked:
+            self.calculator.set_water_calc_method("concentration", 50.0)
+
+        self.parameters_changed.emit()
 class RecipeNotesWidget(QWidget):
     """Widget for recipe notes and instructions"""
 
@@ -622,7 +722,6 @@ class RecipeNotesWidget(QWidget):
 
     def set_notes(self, text: str):
         self.notes_area.setPlainText(text)
-
 class RecipeTab(QWidget):
     """Main tab for recipe creation and calculations"""
     def __init__(self, calculator, cost_manager, recipe_controller, parent=None):
@@ -632,6 +731,13 @@ class RecipeTab(QWidget):
         self.controller = recipe_controller
         self.notes_widget = RecipeNotesWidget()
         self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
+
+        # 1. Create the parameters widget and NAME IT EXACTLY what the controller expects
+        self.recipe_settings = RecipeParametersWidget(self.calculator)
+
+        # 2. Create the results widget and NAME IT EXACTLY what the controller expects
+        self.results_widget = CalculationResultsWidget(self.calculator)
+
         self.setup_ui()
 
     def setup_ui(self):
@@ -641,17 +747,11 @@ class RecipeTab(QWidget):
 
             # Header section
             header_layout = QHBoxLayout()
-            header_layout.addWidget(QLabel("Product Type:"))
-            self.product_type_combo = QComboBox()
-            self.product_type_combo.addItems([
-                "Soap (Cold Process)", "Body Butter", "Body Scrub",
-                "Lotion / Cream", "Balm / Salve", "Other"
-            ])
-            header_layout.addWidget(self.product_type_combo)
-            header_layout.addStretch()
+            #header_layout.addStretch()
             self.main_layout.addLayout(header_layout)
 
             self.splitter = QSplitter(Qt.Orientation.Horizontal)
+
 
             # COLUMN 1: Settings & Notes
             col1_scroll = QScrollArea()
@@ -694,6 +794,18 @@ class RecipeTab(QWidget):
             self.oils_table = QTableWidget()
             self.oils_table.setColumnCount(4)
             self.oils_table.setMinimumHeight(350)
+
+
+            oil_header = self.oils_table.horizontalHeader()
+            # 2. Make Column 0 (Oil Name) stretch to fill the width
+            oil_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+
+            # 3. Make Columns 1, 2, and 3 (Weight, %, Cost) shrink-wrap their text
+            # (We use range(1, 4) because the Oils table has 4 columns total)
+            for i in range(1, 4):
+                oil_header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
+
             soap_layout.addWidget(self.oils_table)
 
             # --- THE SIDE-BY-SIDE SECTION ---
@@ -721,6 +833,17 @@ class RecipeTab(QWidget):
             self.additives_table = QTableWidget()
             self.additives_table.setColumnCount(6) # Updated to 6 for the Action/Remove column
             self.additives_table.setMinimumHeight(200)
+
+            # 1. Grab the "Control Handle" for the horizontal header
+            header = self.additives_table.horizontalHeader()
+
+            # 2. Tell Column 0 (the Name) to take up all the leftover space
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+
+            # 3. Tell Columns 1 through 5 (Weight, %, Cost, etc.) to shrink-wrap the text
+            for i in range(1, 6):
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
             soap_layout.addWidget(self.additives_table)
 
             self.middle_stack.addWidget(soap_page)
@@ -763,7 +886,7 @@ class RecipeTab(QWidget):
             col3_vbox.addLayout(btn_layout)
 
             self.log_btn = QPushButton("Log Batch")
-            self.log_btn.setStyleSheet("background-color: #e63eab; color: white;")
+            self.log_btn.setStyleSheet("background-color: #e63eab; color: black;")
             col3_vbox.addWidget(self.log_btn)
 
             col3_vbox.addStretch()
@@ -800,7 +923,6 @@ class RecipeTab(QWidget):
             #Total Batch scale
             if hasattr(self, 'scale_total_weighgt'):
                 self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
-
 class AdditivesSection(QWidget):
     """A container that holds Fragrance and Additives side-by-side"""
     def __init__(self, calculator, cost_manager=None, parent=None):

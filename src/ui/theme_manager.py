@@ -5,40 +5,70 @@ class ThemeManager:
     def get_styles(accent_color="#0d47a1", hover_color="#1565c0", pressed_color="#0a3d91"):
         """Returns the master stylesheet. You can edit design here once."""
         return f"""
-        QMainWindow, QWidget {{ background-color: #1e1e1e; color: #e0e0e0; }}
+        QMainWindow, QWidget {{ background-color: #1e1e1e;
+         color: #e0e0e0;
+         font-size: 18px; }}
+
         QLabel {{ color: #ffffff; }}
 
+        QTextEdit {{font-size: 16px}}
+
         QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit {{
-            background-color: #2d2d2d; color: #e0e0e0; border: 1px solid #3d3d3d;
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #3d3d3d;
             padding: 5px; border-radius: 3px;
         }}
+
         QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{
-            border: 1px solid {accent_color}; background-color: #323232;
+            border: 1px solid {accent_color};
+            background-color: #323232;
         }}
 
         QPushButton {{
-            background-color: {accent_color}; color: #e0e0e0; border: none;
-            padding: 8px 16px; border-radius: 3px; font-weight: bold;
+            background-color: {accent_color};
+            color: #e0e0e0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            font-weight: 600;
         }}
+
         QPushButton:hover {{ background-color: {hover_color}; }}
+
         QPushButton:pressed {{ background-color: {pressed_color}; }}
 
         QTableWidget {{
-            background-color: #2b2b2b; alternate-background-color: #353535;
-            gridline-color: #444; color: #00BFFF; /* Ice Blue */
-        }}
-        QHeaderView::section {{
-            background-color: #444; color: white; font-weight: bold;
-            padding: 5px; border: 1px solid #3d3d3d;
+            background-color: #2b2b2b;
+            alternate-background-color: #353535;
+            font-size: 16px;
+            border: 1px solid #3d3d3d;
         }}
 
-        QTabWidget::pane {{ border: 1px solid #444; background: #252526; }}
-        QTabBar::tab {{ background: #333; color: #ccc; padding: 10px 20px; border: 1px solid #444; }}
+        QHeaderView::section {{
+            background-color: #2b2b2b;
+            alternate-background-color: #353535;
+            color: white;
+            font-weight: 600;             /* Medium-bold for readability */
+            font-size: 16px;
+        }}
+
+        QTabWidget::pane {{ border: 1px solid #444;
+        background: #252526;
+        }}
+
+        QTabBar::tab {{ background: #333;
+        color: #ccc;
+        padding: 10px 20px;
+        border: 1px solid #444;
+        }}
+
         QTabBar::tab:selected {{
             background-color: {accent_color};
             color: white;
             font-weight: bold;
         }}
+
         """
 
     @staticmethod

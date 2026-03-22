@@ -14,7 +14,7 @@ class SoapCalculator:
         self.lye_type = "NaOH"  # NaOH, KOH, or 90% KOH
         self.total_batch_weight = 0.0
         self.unit_system = "ounces"  # "grams", "ounces", "pounds"
-        self.water_calc_method = "percent"  # "ratio", "percent", "concentration"
+        self.water_calc_method = "concentration"  # "ratio", "percent", "concentration"
         self.water_percent = 38.0  # % of oils (used when water_calc_method = "percent")
         self.lye_concentration = (
             27.0  # % concentration (used when water_calc_method = "concentration")
@@ -234,6 +234,7 @@ class SoapCalculator:
             self.unit_system = unit
         else:
             self.unit_system = "grams"
+
     def set_water_calc_method(self, method: str, value: float = None):
         """
         Set water calculation method.
@@ -270,9 +271,11 @@ class SoapCalculator:
         elif to_unit == "pounds":
             return weight_grams / 453.592
         return weight_grams
+
     def convert_from_grams(self, weight_grams: float, to_unit: str) -> float:
             """ Alias for convert_weight to keep naming consistent with convert_to_grams """
             return self.convert_weight(weight_grams, to_unit)
+
     def convert_to_grams(self, weight: float, from_unit: str) -> float:
         """
         Convert weight from any unit to grams.
@@ -310,6 +313,7 @@ class SoapCalculator:
         # Using .get() ensures that if self.unit_system is "Ounces" (Capitalized)
         # or missing, it defaults to "g" instead of None.
         return mapping.get(self.unit_system, "g")
+
     def get_recipe_dict(self) -> Dict:
         """Get recipe as dictionary for saving"""
         return {
@@ -355,4 +359,28 @@ class SoapCalculator:
             "lye_concentration": self.lye_concentration,
             "additives": self.additives,
 
+        }
+
+    def calculate_masterbatch_pour(self, target_lye_grams, mb_concentration=50.0, final_target_conc=33.3):
+        """
+        mb_concentration: The concentration of your premixed lye (usually 50.0)
+        final_target_conc: What you want the final soap to be (e.g. 33.3 for a 2:1)
+        """
+        # 1. Total weight of the 50/50 solution needed to get the required dry lye
+        # If you need 100g lye, you need 200g of 50/50 solution.
+        total_mb_pour = target_lye_grams / (mb_concentration / 100)
+
+        # 2. Total water required for the FINAL target concentration
+        # Formula: Total Water = (Lye / Conc) - Lye
+        total_required_water = (target_lye_grams / (final_target_conc / 100)) - target_lye_grams
+
+        # 3. Water already present in your masterbatch pour
+        water_in_mb = total_mb_pour - target_lye_grams
+
+        # 4. Additional water to add to the oils
+        extra_water = total_required_water - water_in_mb
+
+        return {
+            "mb_liquid_pour": total_mb_pour,
+            "extra_water_to_add": max(0, extra_water)
         }

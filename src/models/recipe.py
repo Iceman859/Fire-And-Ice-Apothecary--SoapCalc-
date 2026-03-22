@@ -22,7 +22,7 @@ class Recipe:
         self.batch_weight = 0.0
         self.water_calc_method = "ratio"
         self.water_percent = 38.0
-        self.lye_concentration = 30.0
+        self.lye_concentration = 33.40
     #to_dict and from_dict methods for JSON serialization
     def to_dict(self) -> dict:
         """Convert recipe to dictionary"""

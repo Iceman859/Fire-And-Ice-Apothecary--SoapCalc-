@@ -19,11 +19,6 @@
         "quantity": 2.05,
         "unit": "oz"
     },
-    "Oatmeal Milk And Honey (Fragrance Oil)": {
-        "price": 6.5,
-        "quantity": 1.0,
-        "unit": "oz"
-    },
     "Coconut Oil": {
         "price": 0.13,
         "quantity": 0.56,
@@ -59,16 +54,6 @@
         "quantity": 0.5,
         "unit": "oz"
     },
-    "Tallow Beef": {
-        "price": 40.58,
-        "quantity": 6.31,
-        "unit": "lbs"
-    },
-    "Optiphen (Preservative)": {
-        "price": 9.49,
-        "quantity": 1.41,
-        "unit": "oz"
-    },
     "Shea Butter": {
         "price": 15.04,
         "quantity": 2.6,
@@ -83,11 +68,6 @@
         "price": 24.99,
         "quantity": 16.0,
         "unit": "oz"
-    },
-    "Cocoa Butter": {
-        "price": 39.99,
-        "quantity": 1.0,
-        "unit": "lbs"
     },
     "Marigold Yellow Mica": {
         "price": 3.99,
@@ -110,8 +90,8 @@
         "unit": "oz"
     },
     "Berry Silk Fragrance Oil": {
-        "price": 8.99,
-        "quantity": 3.0,
+        "price": 11.99,
+        "quantity": 4.0,
         "unit": "oz"
     },
     "Pink Strawberry Fragrance Oil": {
@@ -125,8 +105,8 @@
         "unit": "oz"
     },
     "Tobacco and Bay Leaf Fragrance Oil": {
-        "price": 3.85,
-        "quantity": 0.75,
+        "price": 8.99,
+        "quantity": 1.75,
         "unit": "oz"
     },
     "Kentucky Bourbon Fragrance Oil": {
@@ -142,7 +122,7 @@
     "Emulsifying Wax": {
         "price": 7.99,
         "quantity": 1.0,
-        "unit": "lbs"
+        "unit": "lb"
     },
     "Stearic Acid": {
         "price": 10.99,
@@ -172,7 +152,7 @@
     "Glycerin - Liquid": {
         "price": 5.99,
         "quantity": 1.0,
-        "unit": "lbs"
+        "unit": "lb"
     },
     "Pear Pop Fragrance Oil": {
         "price": 9.99,
@@ -187,7 +167,7 @@
     "Organic Cocoa Butter Wafers": {
         "price": 39.99,
         "quantity": 1.0,
-        "unit": "lbs"
+        "unit": "lb"
     },
     "Hot Pink Mica": {
         "price": 3.99,
@@ -202,21 +182,26 @@
     "Natural Hemp Seed Oil": {
         "price": 11.99,
         "quantity": 1.0,
-        "unit": "lbs"
+        "unit": "lb"
     },
     "Sweet Almond Oil": {
         "price": 8.99,
         "quantity": 1.0,
-        "unit": "lbs"
+        "unit": "lb"
     },
     "Droppers With Suction Bulb": {
         "price": 2.99,
         "quantity": 10.0,
         "unit": "count"
     },
-    "Mini Scoop": {
-        "price": 2.99,
-        "quantity": 10.0,
-        "unit": "count"
+    "Tallow Beef": {
+        "price": 34.96,
+        "quantity": 7.0,
+        "unit": "lbs"
+    },
+    "Lavender 40/42": {
+        "price": 26.99,
+        "quantity": 8.0,
+        "unit": "oz"
     }
 }

@@ -83,22 +83,29 @@ def add_additive_entry(name: str, info: dict):
     """Add or update an additive entry in the ADDITIVES DB."""
     ADDITIVES[name] = info
 
-    # Load existing custom additives
+    # Load existing custom additives with safe error handling
     custom_additives = {}
     if os.path.exists(CUSTOM_ADDITIVES_FILE):
         try:
             with open(CUSTOM_ADDITIVES_FILE, 'r') as f:
                 custom_additives = json.load(f)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            print(f"Error loading custom additives: {e}")
 
     custom_additives[name] = info
 
+    temp_path = f"{CUSTOM_ADDITIVES_FILE}.tmp"
     try:
-        with open(CUSTOM_ADDITIVES_FILE, 'w') as f:
+        with open(temp_path, 'w') as f:
             json.dump(custom_additives, f, indent=4)
-    except Exception as e:
+        os.replace(temp_path, CUSTOM_ADDITIVES_FILE)
+    except (IOError, OSError) as e:
         print(f"Error saving custom additive: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 
 def remove_additive_entry(name: str):
@@ -115,11 +122,18 @@ def remove_additive_entry(name: str):
 
     if name in custom_additives:
         del custom_additives[name]
+        temp_path = f"{CUSTOM_ADDITIVES_FILE}.tmp"
         try:
-            with open(CUSTOM_ADDITIVES_FILE, 'w') as f:
+            with open(temp_path, 'w') as f:
                 json.dump(custom_additives, f, indent=4)
-        except Exception as e:
+            os.replace(temp_path, CUSTOM_ADDITIVES_FILE)
+        except (IOError, OSError) as e:
             print(f"Error deleting custom additive: {e}")
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
 # Load custom additives on import
 if os.path.exists(CUSTOM_ADDITIVES_FILE):
@@ -127,5 +141,5 @@ if os.path.exists(CUSTOM_ADDITIVES_FILE):
         with open(CUSTOM_ADDITIVES_FILE, 'r') as f:
             custom_data = json.load(f)
             ADDITIVES.update(custom_data)
-    except Exception as e:
+    except (json.JSONDecodeError, IOError, OSError) as e:
         print(f"Error loading custom additives: {e}")
