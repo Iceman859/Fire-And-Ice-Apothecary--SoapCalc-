@@ -27,6 +27,233 @@ from src.models import SoapCalculator
 from src.utils.logger import log
 from src.models.cost_manager import CostManager
 
+class RecipeTab(QWidget):
+    """Main tab for recipe creation and calculations"""
+    def __init__(self, calculator, cost_manager, recipe_controller, parent=None):
+        super().__init__(parent)
+        self.calculator = calculator
+        self.cost_manager = cost_manager
+        self.controller = recipe_controller
+        self.notes_widget = RecipeNotesWidget()
+        self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
+
+        # 1. Create the parameters widget and NAME IT EXACTLY what the controller expects
+        self.recipe_settings = RecipeParametersWidget(self.calculator)
+
+        # 2. Create the results widget and NAME IT EXACTLY what the controller expects
+        self.results_widget = CalculationResultsWidget(self.calculator)
+
+        self.setup_ui()
+
+    def setup_ui(self):
+            """Setup the main UI layout for the recipe tab"""
+            # 1. Initialize the main layout properly
+            self.main_layout = QVBoxLayout(self)
+
+            # Header section
+            header_layout = QHBoxLayout()
+            #header_layout.addStretch()
+            self.main_layout.addLayout(header_layout)
+
+            self.splitter = QSplitter(Qt.Orientation.Horizontal)
+
+
+            # COLUMN 1: Settings & Notes
+            col1_scroll = QScrollArea()
+            col1_scroll.setWidgetResizable(True)
+            col1_container = QWidget()
+            col1_vbox = QVBoxLayout(col1_container)
+
+            self.recipe_settings = RecipeParametersWidget(self.calculator, parent=self)
+            col1_vbox.addWidget(QLabel("<b>Recipe Parameters</b>"))
+            col1_vbox.addWidget(self.recipe_settings)
+
+            col1_vbox.addSpacing(20)
+            col1_vbox.addWidget(QLabel("<b>Process Notes</b>"))
+            col1_vbox.addWidget(self.notes_widget)
+
+            col1_vbox.addStretch()
+            col1_scroll.setWidget(col1_container)
+
+            # COLUMN 2: Ingredients (Oils, Additives, Fragrance)
+            col2_scroll = QScrollArea()
+            col2_scroll.setWidgetResizable(True)
+            col2_container = QWidget()
+            col2_vbox = QVBoxLayout(col2_container)
+            self.middle_stack = QStackedWidget()
+
+            soap_page = QWidget()
+            soap_layout = QVBoxLayout(soap_page)
+
+            # Oil Input Section
+            self.oil_input_widget = OilInputWidget(
+                self.calculator,
+                mode="soap",
+                ingredient_names=get_all_oil_names(),
+                cost_manager=self.cost_manager,
+                parent=self,
+            )
+            soap_layout.addWidget(QLabel("<b>Add Ingredients:</b>"))
+            soap_layout.addWidget(self.oil_input_widget)
+
+            self.oils_table = QTableWidget()
+            self.oils_table.setColumnCount(4)
+            self.oils_table.setMinimumHeight(350)
+
+
+            oil_header = self.oils_table.horizontalHeader()
+            # 2. Make Column 0 (Oil Name) stretch to fill the width
+            oil_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+
+            # 3. Make Columns 1, 2, and 3 (Weight, %, Cost) shrink-wrap their text
+            # (We use range(1, 4) because the Oils table has 4 columns total)
+            for i in range(1, 4):
+                oil_header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
+
+            soap_layout.addWidget(self.oils_table)
+
+            # --- THE SIDE-BY-SIDE SECTION ---
+            soap_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
+
+            # Create horizontal container
+            input_row_layout = QHBoxLayout()
+            input_row_layout.setSpacing(10)
+
+            self.fragrance_widget = FragranceWidget(
+                self.calculator, cost_manager=self.cost_manager, parent=self
+            )
+            self.additive_widget = AdditiveInputWidget(
+                self.calculator, cost_manager=self.cost_manager, parent=self
+            )
+
+            # Add widgets to the horizontal row with equal stretch
+            input_row_layout.addWidget(self.fragrance_widget, 1)
+            input_row_layout.addWidget(self.additive_widget, 1)
+
+            # Add the horizontal row to the soap layout
+            soap_layout.addLayout(input_row_layout)
+
+            # Additives Table (Below the inputs)
+            self.additives_table = QTableWidget()
+            self.additives_table.setColumnCount(6) # Updated to 6 for the Action/Remove column
+            self.additives_table.setMinimumHeight(200)
+
+            # 1. Grab the "Control Handle" for the horizontal header
+            header = self.additives_table.horizontalHeader()
+
+            # 2. Tell Column 0 (the Name) to take up all the leftover space
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+
+            # 3. Tell Columns 1 through 5 (Weight, %, Cost, etc.) to shrink-wrap the text
+            for i in range(1, 6):
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
+            soap_layout.addWidget(self.additives_table)
+
+            self.middle_stack.addWidget(soap_page)
+            self.middle_stack.addWidget(QWidget()) # Placeholder
+
+            col2_vbox.addWidget(self.middle_stack)
+            col2_container.setLayout(col2_vbox)
+            col2_scroll.setWidget(col2_container)
+
+            # COLUMN 3: Results & Operations
+            col3_scroll = QScrollArea()
+            col3_scroll.setWidgetResizable(True)
+            col3_container = QWidget()
+            col3_vbox = QVBoxLayout(col3_container)
+
+            self.results_widget = CalculationResultsWidget(
+                self.calculator, cost_manager=self.cost_manager, mode="soap", parent=self
+            )
+            col3_vbox.addWidget(QLabel("<b>Calculation Results</b>"))
+            col3_vbox.addWidget(self.results_widget)
+
+            col3_vbox.addWidget(QLabel("<b>Scale Recipe:</b>"))
+            self.scale_label = QLabel("Total Oil Weight (g):")
+            col3_vbox.addWidget(self.scale_label)
+            self.scale_spinbox = QDoubleSpinBox()
+            self.scale_spinbox.setRange(0, 10000)
+            col3_vbox.addWidget(self.scale_spinbox)
+
+            self.scale_btn = QPushButton("Scale Recipe")
+            col3_vbox.addWidget(self.scale_btn)
+
+            col3_vbox.addWidget(QLabel("<b>Recipe Operations:</b>"))
+            btn_layout = QHBoxLayout()
+            self.new_btn = QPushButton("New")
+            self.save_btn = QPushButton("Save")
+            self.load_btn = QPushButton("Load")
+            btn_layout.addWidget(self.new_btn)
+            btn_layout.addWidget(self.save_btn)
+            btn_layout.addWidget(self.load_btn)
+            col3_vbox.addLayout(btn_layout)
+
+            self.log_btn = QPushButton("Log Batch")
+            self.log_btn.setStyleSheet("background-color: #e63eab; color: black;")
+            col3_vbox.addWidget(self.log_btn)
+
+            col3_vbox.addStretch()
+            col3_scroll.setWidget(col3_container)
+
+            # Final assembly
+            self.splitter.addWidget(col1_scroll)
+            self.splitter.addWidget(col2_scroll)
+            self.splitter.addWidget(col3_scroll)
+            self.main_layout.addWidget(self.splitter)
+
+    def on_unit_changed(self, unit_text: str):
+        # ... Keep this method at the end ...
+            """Update the UI (The REACTION)"""
+            print(f"DEBUG: RecipeTab RECEIVED unit change: {unit_text}")
+
+            # 1. Update the scale label ("Total Oil Weight (g)" -> "(Ounces)")
+            if hasattr(self, 'scale_label'):
+                self.scale_label.setText(f"Total Oil Weight ({unit_text}):")
+
+            if hasattr(self, 'scale_total_weight'):
+                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
+
+            # 2. Sync the oil input unit selector so it matches the new setting
+            if hasattr(self, 'oil_input_widget'):
+                self.oil_input_widget.set_unit_system(unit_text.lower())
+
+            # 3. Use the controller to trigger a full calculation and UI push
+            # This is the "safe" way because your controller already knows
+            # how to talk to both the calculator and the results_widget.
+            if hasattr(self, 'controller'):
+                self.controller.update_calculations()
+
+            #Total Batch scale
+            if hasattr(self, 'scale_total_weighgt'):
+                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
+class AdditivesSection(QWidget):
+    """A container that holds Fragrance and Additives side-by-side"""
+    def __init__(self, calculator, cost_manager=None, parent=None):
+        super().__init__(parent)
+        self.calculator = calculator
+        self.cost_manager = cost_manager
+        self.setup_ui()
+
+    def setup_ui(self):
+        # 1. Create the horizontal layout
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(15)
+
+        # 2. Initialize the two specific widgets
+        self.fragrance_calc = FragranceWidget(self.calculator, self.cost_manager)
+        self.additives_input = AdditiveInputWidget(self.calculator, self.cost_manager)
+
+        # 3. Add them to the layout with equal stretch (1, 1)
+        self.main_layout.addWidget(self.fragrance_calc, 1)
+        self.main_layout.addWidget(self.additives_input, 1)
+
+    def refresh(self):
+        """If you need them to 'talk', you can trigger updates here"""
+        self.fragrance_calc.update_calculation()
+        self.additives_input.refresh_additives()
 class OilInputWidget(QWidget):
     """Widget for adding oils to recipe"""
 
@@ -394,8 +621,9 @@ class FragranceWidget(QWidget):
         pass
 class CalculationResultsWidget(QWidget):
     """Widget for displaying calculation results"""
+    on_bar_size_changed = pyqtSignal(float)
+    on_packaging_cost_changed = pyqtSignal(float)
 
-    packaging_cost_changed = pyqtSignal(float)
 
     def __init__(
         self,
@@ -468,17 +696,14 @@ class CalculationResultsWidget(QWidget):
         y_layout.addWidget(QLabel("Cost/Unit:"), 3, 0)
         y_layout.addWidget(self.cost_per_unit_label, 3, 1)
         layout.addWidget(self.yield_group)
-        self.bar_size_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
-        self.ypacking_cost_spin.valueChanged.connect(lambda: self.update_display(self.last_properties))
-        self.ypacking_cost_spin.valueChanged.connect(self.on_packaging_cost_changed)
-            #LYE WARNING LABEL
+
+        #LYE WARNING LABEL
         self.status_label = QLabel("Waiting for calculation...")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_label)
 
         # Masterbatch UI - Add to the existing w_layout (Batch Weights group)
         next_row = 7
-
         self.mb_pour_label = QLabel("Liquid Lye (50/50):")
         self.mb_pour_value = QLabel("0.00 oz")
         self.mb_pour_value.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -497,8 +722,9 @@ class CalculationResultsWidget(QWidget):
         self.extra_water_label.setVisible(False)
         self.extra_water_value.setVisible(False)
 
-    def on_packaging_cost_changed(self, value):
-        self.packaging_cost_changed.emit(value)
+        self.bar_size_spin.valueChanged.connect(self.bar_size_changed)
+        self.ypacking_cost_spin.valueChanged.connect(self.packaging_cost_changed)
+
 
     def set_mode(self, mode: str):
         self.mode = mode
@@ -578,6 +804,14 @@ class CalculationResultsWidget(QWidget):
         else:
             self.status_label.setText("High Water Content")
             self.status_label.setStyleSheet("color: #ffbb33; font-weight: normal;")
+
+    def packaging_cost_changed(self, value):
+        self.on_packaging_cost_changed.emit(value)
+
+    def bar_size_changed(self, value):
+        self.on_bar_size_changed.emit(value)
+
+
 class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
     parameters_changed = pyqtSignal()
@@ -639,7 +873,6 @@ class RecipeParametersWidget(QWidget):
         self.water_method_combo.currentTextChanged.connect(self.on_water_value_changed)
         self.water_value_spinbox.valueChanged.connect(self.on_water_value_changed)
 
-
     def on_lye_type_changed(self, lye_type: str):
         self.calculator.set_lye_type(lye_type)
         self.parameters_changed.emit()
@@ -683,8 +916,8 @@ class RecipeParametersWidget(QWidget):
             self.calculator.set_water_calc_method(method, self.water_value_spinbox.value())
 
         self.parameters_changed.emit()
+        log.debug(f"The Water Has Been Changed: {method, self.water_value_spinbox.value()}")
 
-    #masterbatch isable other methods when checked
     def toggle_masterbatch(self, checked):
         # Show/Hide the target concentration input
         self.target_conc_label.setVisible(checked)
@@ -722,230 +955,3 @@ class RecipeNotesWidget(QWidget):
 
     def set_notes(self, text: str):
         self.notes_area.setPlainText(text)
-class RecipeTab(QWidget):
-    """Main tab for recipe creation and calculations"""
-    def __init__(self, calculator, cost_manager, recipe_controller, parent=None):
-        super().__init__(parent)
-        self.calculator = calculator
-        self.cost_manager = cost_manager
-        self.controller = recipe_controller
-        self.notes_widget = RecipeNotesWidget()
-        self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
-
-        # 1. Create the parameters widget and NAME IT EXACTLY what the controller expects
-        self.recipe_settings = RecipeParametersWidget(self.calculator)
-
-        # 2. Create the results widget and NAME IT EXACTLY what the controller expects
-        self.results_widget = CalculationResultsWidget(self.calculator)
-
-        self.setup_ui()
-
-    def setup_ui(self):
-            """Setup the main UI layout for the recipe tab"""
-            # 1. Initialize the main layout properly
-            self.main_layout = QVBoxLayout(self)
-
-            # Header section
-            header_layout = QHBoxLayout()
-            #header_layout.addStretch()
-            self.main_layout.addLayout(header_layout)
-
-            self.splitter = QSplitter(Qt.Orientation.Horizontal)
-
-
-            # COLUMN 1: Settings & Notes
-            col1_scroll = QScrollArea()
-            col1_scroll.setWidgetResizable(True)
-            col1_container = QWidget()
-            col1_vbox = QVBoxLayout(col1_container)
-
-            self.recipe_settings = RecipeParametersWidget(self.calculator, parent=self)
-            col1_vbox.addWidget(QLabel("<b>Recipe Parameters</b>"))
-            col1_vbox.addWidget(self.recipe_settings)
-
-            col1_vbox.addSpacing(20)
-            col1_vbox.addWidget(QLabel("<b>Process Notes</b>"))
-            col1_vbox.addWidget(self.notes_widget)
-
-            col1_vbox.addStretch()
-            col1_scroll.setWidget(col1_container)
-
-            # COLUMN 2: Ingredients (Oils, Additives, Fragrance)
-            col2_scroll = QScrollArea()
-            col2_scroll.setWidgetResizable(True)
-            col2_container = QWidget()
-            col2_vbox = QVBoxLayout(col2_container)
-            self.middle_stack = QStackedWidget()
-
-            soap_page = QWidget()
-            soap_layout = QVBoxLayout(soap_page)
-
-            # Oil Input Section
-            self.oil_input_widget = OilInputWidget(
-                self.calculator,
-                mode="soap",
-                ingredient_names=get_all_oil_names(),
-                cost_manager=self.cost_manager,
-                parent=self,
-            )
-            soap_layout.addWidget(QLabel("<b>Add Ingredients:</b>"))
-            soap_layout.addWidget(self.oil_input_widget)
-
-            self.oils_table = QTableWidget()
-            self.oils_table.setColumnCount(4)
-            self.oils_table.setMinimumHeight(350)
-
-
-            oil_header = self.oils_table.horizontalHeader()
-            # 2. Make Column 0 (Oil Name) stretch to fill the width
-            oil_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-
-            # 3. Make Columns 1, 2, and 3 (Weight, %, Cost) shrink-wrap their text
-            # (We use range(1, 4) because the Oils table has 4 columns total)
-            for i in range(1, 4):
-                oil_header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-
-            soap_layout.addWidget(self.oils_table)
-
-            # --- THE SIDE-BY-SIDE SECTION ---
-            soap_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
-
-            # Create horizontal container
-            input_row_layout = QHBoxLayout()
-            input_row_layout.setSpacing(10)
-
-            self.fragrance_widget = FragranceWidget(
-                self.calculator, cost_manager=self.cost_manager, parent=self
-            )
-            self.additive_widget = AdditiveInputWidget(
-                self.calculator, cost_manager=self.cost_manager, parent=self
-            )
-
-            # Add widgets to the horizontal row with equal stretch
-            input_row_layout.addWidget(self.fragrance_widget, 1)
-            input_row_layout.addWidget(self.additive_widget, 1)
-
-            # Add the horizontal row to the soap layout
-            soap_layout.addLayout(input_row_layout)
-
-            # Additives Table (Below the inputs)
-            self.additives_table = QTableWidget()
-            self.additives_table.setColumnCount(6) # Updated to 6 for the Action/Remove column
-            self.additives_table.setMinimumHeight(200)
-
-            # 1. Grab the "Control Handle" for the horizontal header
-            header = self.additives_table.horizontalHeader()
-
-            # 2. Tell Column 0 (the Name) to take up all the leftover space
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-
-            # 3. Tell Columns 1 through 5 (Weight, %, Cost, etc.) to shrink-wrap the text
-            for i in range(1, 6):
-                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-            soap_layout.addWidget(self.additives_table)
-
-            self.middle_stack.addWidget(soap_page)
-            self.middle_stack.addWidget(QWidget()) # Placeholder
-
-            col2_vbox.addWidget(self.middle_stack)
-            col2_container.setLayout(col2_vbox)
-            col2_scroll.setWidget(col2_container)
-
-            # COLUMN 3: Results & Operations
-            col3_scroll = QScrollArea()
-            col3_scroll.setWidgetResizable(True)
-            col3_container = QWidget()
-            col3_vbox = QVBoxLayout(col3_container)
-
-            self.results_widget = CalculationResultsWidget(
-                self.calculator, cost_manager=self.cost_manager, mode="soap", parent=self
-            )
-            col3_vbox.addWidget(QLabel("<b>Calculation Results</b>"))
-            col3_vbox.addWidget(self.results_widget)
-
-            col3_vbox.addWidget(QLabel("<b>Scale Recipe:</b>"))
-            self.scale_label = QLabel("Total Oil Weight (g):")
-            col3_vbox.addWidget(self.scale_label)
-            self.scale_spinbox = QDoubleSpinBox()
-            self.scale_spinbox.setRange(0, 10000)
-            col3_vbox.addWidget(self.scale_spinbox)
-
-            self.scale_btn = QPushButton("Scale Recipe")
-            col3_vbox.addWidget(self.scale_btn)
-
-            col3_vbox.addWidget(QLabel("<b>Recipe Operations:</b>"))
-            btn_layout = QHBoxLayout()
-            self.new_btn = QPushButton("New")
-            self.save_btn = QPushButton("Save")
-            self.load_btn = QPushButton("Load")
-            btn_layout.addWidget(self.new_btn)
-            btn_layout.addWidget(self.save_btn)
-            btn_layout.addWidget(self.load_btn)
-            col3_vbox.addLayout(btn_layout)
-
-            self.log_btn = QPushButton("Log Batch")
-            self.log_btn.setStyleSheet("background-color: #e63eab; color: black;")
-            col3_vbox.addWidget(self.log_btn)
-
-            col3_vbox.addStretch()
-            col3_scroll.setWidget(col3_container)
-
-            # Final assembly
-            self.splitter.addWidget(col1_scroll)
-            self.splitter.addWidget(col2_scroll)
-            self.splitter.addWidget(col3_scroll)
-            self.main_layout.addWidget(self.splitter)
-
-    def on_unit_changed(self, unit_text: str):
-        # ... Keep this method at the end ...
-            """Update the UI (The REACTION)"""
-            print(f"DEBUG: RecipeTab RECEIVED unit change: {unit_text}")
-
-            # 1. Update the scale label ("Total Oil Weight (g)" -> "(Ounces)")
-            if hasattr(self, 'scale_label'):
-                self.scale_label.setText(f"Total Oil Weight ({unit_text}):")
-
-            if hasattr(self, 'scale_total_weight'):
-                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
-
-            # 2. Sync the oil input unit selector so it matches the new setting
-            if hasattr(self, 'oil_input_widget'):
-                self.oil_input_widget.set_unit_system(unit_text.lower())
-
-            # 3. Use the controller to trigger a full calculation and UI push
-            # This is the "safe" way because your controller already knows
-            # how to talk to both the calculator and the results_widget.
-            if hasattr(self, 'controller'):
-                self.controller.update_calculations()
-
-            #Total Batch scale
-            if hasattr(self, 'scale_total_weighgt'):
-                self.scale_total_weight.setText(f"Total Batch Weight ({unit_text}):")
-class AdditivesSection(QWidget):
-    """A container that holds Fragrance and Additives side-by-side"""
-    def __init__(self, calculator, cost_manager=None, parent=None):
-        super().__init__(parent)
-        self.calculator = calculator
-        self.cost_manager = cost_manager
-        self.setup_ui()
-
-    def setup_ui(self):
-        # 1. Create the horizontal layout
-        self.main_layout = QHBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(15)
-
-        # 2. Initialize the two specific widgets
-        self.fragrance_calc = FragranceWidget(self.calculator, self.cost_manager)
-        self.additives_input = AdditiveInputWidget(self.calculator, self.cost_manager)
-
-        # 3. Add them to the layout with equal stretch (1, 1)
-        self.main_layout.addWidget(self.fragrance_calc, 1)
-        self.main_layout.addWidget(self.additives_input, 1)
-
-    def refresh(self):
-        """If you need them to 'talk', you can trigger updates here"""
-        self.fragrance_calc.update_calculation()
-        self.additives_input.refresh_additives()

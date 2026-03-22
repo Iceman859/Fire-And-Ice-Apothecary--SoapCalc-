@@ -64,8 +64,8 @@ class MainWindow(QMainWindow):
             self.current_recipe = Recipe()
             self._settings = QSettings("FireAndIceApothecary", "SoapCalc")
             self.controller = RecipeController(self, self.calculator, self.cost_manager, self.recipe_manager)
-            self.params_widget = RecipeParametersWidget(self.calculator)
-            self.results_widget = CalculationResultsWidget()
+            #self.recipe_settings = RecipeParametersWidget(self.calculator)
+            #self.results_widget = CalculationResultsWidget()
 
             # 2. INITIALIZE CONTROLLER
             self.manager_widget = RecipeManagementWidget(self.recipe_manager)
@@ -221,13 +221,6 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
 
-
-    #def create_profit_tab(self):
-        """Create the business profit analysis tab without extra containers"""
-        #if not hasattr(self, 'profit_widget'):
-            #self.profit_widget = ProfitAnalysisWidget()
-        #return self.profit_widget
-
     def create_batch_tab(self):
         """Create the batch history tab"""
         tab = QWidget()
@@ -275,10 +268,13 @@ class MainWindow(QMainWindow):
             self.oil_input_widget.oil_added.connect(self.controller.update_calculations)
             self.oil_input_widget.target_weight_callback = lambda: self.calculator.total_batch_weight
 
-            self.recipe_tab.results_widget.packaging_cost_changed.connect(self.controller.update_calculations)
-            self.recipe_settings.parameters_changed.connect(self.controller.update_calculations)
-            self.recipe_settings.parameters_changed.connect(self.sync_settings_to_calculator)
-            self.recipe_settings.parameters_changed.connect(self.load_preferences)
+            #self.recipe_tab.results_widget.packaging_cost_changed.connect(self.controller.update_calculations)
+            self.recipe_settings.parameters_changed.connect(self.on_recipe_modified)
+            self.results_widget.on_bar_size_changed.connect(self.on_recipe_modified)
+            self.results_widget.on_packaging_cost_changed.connect(self.on_recipe_modified)
+
+
+
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
@@ -686,12 +682,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "results_widget"):
             self.controller.update_calculations()
 
-        log.debug("New recipe initialized with 32oz default target.")
+        #log.debug("New recipe initialized with 32oz default target.")
         # 4. Reload defaults (this updates results and UI tables)
         self.load_preferences()
         self.update_oils_table()
         self.controller.update_calculations()
-        log.debug("New recipe initialized with default preferences. Refreshing UI.")
+        #log.debug("New recipe initialized with default preferences. Refreshing UI.")
         self.statusBar().showMessage("New recipe created.")
 
     def load_preferences(self):
@@ -863,10 +859,12 @@ class MainWindow(QMainWindow):
         }
         method = method_map.get(method_text, "ratio")
         self.calculator.set_water_calc_method(method, val)
+        log.debug(f"The Values for set water are {method}, {val}")
 
         # Update UI elements that depend on settings
         self.update_oils_table_headers()
         self.update_scale_label()
+
 
     def remove_selected_oil(self, table: QTableWidget):
         """Remove selected oil from recipe"""
