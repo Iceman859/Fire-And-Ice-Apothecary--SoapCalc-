@@ -327,7 +327,7 @@
         "recipe_name": "Unscented Goat Milk Oatmeal",
         "date_made": "2026-02-17",
         "cure_date": "2026-03-17",
-        "status": "Curing",
+        "status": "Ready",
         "total_weight": 1296.91,
         "recipe_snapshot": {
             "oils": {
@@ -381,7 +381,7 @@
         "recipe_name": "Love Spell",
         "date_made": "2026-02-15",
         "cure_date": "2026-03-15",
-        "status": "Curing",
+        "status": "Ready",
         "total_weight": 1290.03,
         "recipe_snapshot": {
             "oils": {

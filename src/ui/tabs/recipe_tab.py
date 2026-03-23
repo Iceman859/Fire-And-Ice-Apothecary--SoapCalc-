@@ -301,6 +301,7 @@ class OilInputWidget(QWidget):
 
         self.weight_unit_combo = QComboBox()
         self.weight_unit_combo.addItems(["g", "oz", "lbs", "%"])
+
         self.weight_unit_combo.currentTextChanged.connect(self.on_unit_changed)
         self.weight_unit_combo.setFixedWidth(60)
         layout.addWidget(self.weight_unit_combo)
@@ -373,14 +374,6 @@ class OilInputWidget(QWidget):
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.oil_combo.setCompleter(completer)
-
-    def set_mode(self, mode: str):
-        """Update widget mode (label text)"""
-        self.mode = mode
-        if self.mode == "soap":
-            self.input_label.setText("Oil:")
-        else:
-            self.input_label.setText("Ingredient:")
 
     def get_oils(self):
         """Returns the current oils in the calculator brain."""
@@ -497,11 +490,6 @@ class AdditiveInputWidget(QWidget):
         else:
             self.percent_widget.setVisible(False)
             self.weight_widget.setVisible(True)
-
-    def set_mode(self, mode: str):
-        is_soap = mode == "soap"
-        self.group.setTitle("Additives & Water Replacement" if is_soap else "Additives")
-        self.water_replace_check.setVisible(is_soap)
 
     def set_unit_system(self, unit_system: str):
         unit_map = {"grams": "g", "ounces": "oz", "pounds": "lbs"}
@@ -674,6 +662,10 @@ class CalculationResultsWidget(QWidget):
             self.weight_labels[key] = val_lbl
             self.row_widgets[key] = (lbl, val_lbl)
 
+        # Instead of calling it on the key directly:
+        for widget in self.row_widgets["Exfoliant:Oil Ratio"]:
+            widget.setVisible(False)
+
         layout.addWidget(self.weights_group)
         # Yield Estimation
         self.yield_group = QGroupBox("Yield Estimation")
@@ -726,8 +718,6 @@ class CalculationResultsWidget(QWidget):
         self.ypacking_cost_spin.valueChanged.connect(self.packaging_cost_changed)
 
 
-    def set_mode(self, mode: str):
-        self.mode = mode
 
     def update_display(self, results):
         """Receives pre-calculated data and updates labels on screen."""
@@ -762,6 +752,15 @@ class CalculationResultsWidget(QWidget):
         for widget in [self.mb_pour_label, self.mb_pour_value,
                     self.extra_water_label, self.extra_water_value]:
             widget.setVisible(is_mb)
+
+# List the keys that should be HIDDEN when Masterbatch is active
+        mb_exclusive_keys = ["Add'l Water", "Lye Weight", "Water Weight"]
+
+        for key in mb_exclusive_keys:
+            if key in self.row_widgets:
+                for widget in self.row_widgets[key]:
+                    widget.setVisible(not is_mb)
+
 
         if is_mb:
             mb_pour = results.get('mb_liquid_pour', 0.0)

@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
 
 
             # 1. INITIALIZE BRAINS
+            self.view = self
             self.calculator = SoapCalculator()
             self.recipe_manager = RecipeManager("recipes")
             self.cost_manager = CostManager()
@@ -129,10 +130,9 @@ class MainWindow(QMainWindow):
         self.recipe_tab = RecipeTab(self.calculator, self.cost_manager, self.controller)
         tabs.addTab(self.recipe_tab, "Recipe Calculator")
 
-        # Notes Tab
         # Create the Manager View (The Library)
-        self.manager_widget = RecipeManagementWidget(self.recipe_manager)
-        tabs.addTab(self.manager_widget, "Manage Recipes")
+        #self.manager_widget = RecipeManagementWidget(self.recipe_manager)
+        #tabs.addTab(self.manager_widget, "Manage Recipes")
 
         # View/Print Tab
         self.print_tab = self.create_print_tab()
@@ -207,7 +207,7 @@ class MainWindow(QMainWindow):
         """Create the view/print tab"""
         tab = QWidget()
         layout = QVBoxLayout()
-        self.report_widget = RecipeReportWidget(self.calculator)
+        self.report_widget = RecipeReportWidget(self.view, self.calculator)
         layout.addWidget(self.report_widget)
         tab.setLayout(layout)
         return tab
@@ -272,9 +272,6 @@ class MainWindow(QMainWindow):
             self.recipe_settings.parameters_changed.connect(self.on_recipe_modified)
             self.results_widget.on_bar_size_changed.connect(self.on_recipe_modified)
             self.results_widget.on_packaging_cost_changed.connect(self.on_recipe_modified)
-
-
-
 
     def on_tab_changed(self, index):
         """Handle tab changes"""
@@ -859,7 +856,7 @@ class MainWindow(QMainWindow):
         }
         method = method_map.get(method_text, "ratio")
         self.calculator.set_water_calc_method(method, val)
-        log.debug(f"The Values for set water are {method}, {val}")
+        #log.debug(f"The Values for set water are {method}, {val}")
 
         # Update UI elements that depend on settings
         self.update_oils_table_headers()

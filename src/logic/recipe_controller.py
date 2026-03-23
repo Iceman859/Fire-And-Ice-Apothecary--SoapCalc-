@@ -21,7 +21,7 @@ class RecipeController:
     #Universal Calculation Update
     def update_calculations(self):
         """Refreshes all math, unit labels, and identity markers with extensive trace logging."""
-        log.debug("Starting Universal Calculation Update")
+        #log.debug("Starting Universal Calculation Update")
     # --- STEP 0: SYNC UI TO CALCULATOR (The 'Pull') ---
         # This ensures the calculator has the LATEST info before doing math
         try:
@@ -29,10 +29,10 @@ class RecipeController:
 
             # Pull Superfat
             self.calculator.set_superfat(settings.superfat_spinbox.value())
-            log.debug(f"Superfat set to: {self.calculator.superfat_percent}")
+            #log.debug(f"Superfat set to: {self.calculator.superfat_percent}")
             # Pull Lye Type
             self.calculator.set_lye_type(settings.lye_combo.currentText())
-            log.debug(f"Lye type set to: {self.calculator.lye_type}")
+            #log.debug(f"Lye type set to: {self.calculator.lye_type}")
 
             # Pull Water (This replaces the need for the loop-heavy sync_settings)
             method_text = settings.water_method_combo.currentText()
@@ -45,7 +45,7 @@ class RecipeController:
             }
             method = mapping.get(method_text, "ratio")
             self.calculator.set_water_calc_method(method, val)
-            log.debug(f"Water calculation method set to: {self.calculator.water_calc_method}")
+            #log.debug(f"Water calculation method set to: {self.calculator.water_calc_method}")
 
 
         except Exception as e:
@@ -139,13 +139,13 @@ class RecipeController:
 
             if hasattr(self.view, 'update_scale_label'):
                 self.view.update_scale_label()
-            log.debug("UI labels and display widgets updated.")
+            #log.debug("UI labels and display widgets updated.")
         except Exception as e:
             log.error(f"UI display update failed: {e}")
 
         # 6. Table Refreshes (With Signal Safety)
         try:
-            log.debug("Refreshing UI tables...")
+            #log.debug("Refreshing UI tables...")
             self.view._suppress_oils_table_signals = True
             self.view._suppress_additives_table_signals = True
 
@@ -158,9 +158,9 @@ class RecipeController:
             # Crucial: Always re-enable signals even if refresh fails
             self.view._suppress_oils_table_signals = False
             self.view._suppress_additives_table_signals = False
-            log.debug("Table signals re-enabled.")
+            #log.debug("Table signals re-enabled.")
 
-        log.debug("--- Calculation Update Complete ---")
+        #log.debug("--- Calculation Update Complete ---")
 
     #Perform Save with Manual JSON Patching
     def perform_save(self):
@@ -261,7 +261,7 @@ class RecipeController:
             }
             self.view.recipe_tab.recipe_settings.water_method_combo.setCurrentText(method_to_text.get(self.calculator.water_calc_method, "Water:Lye Ratio"))
 
-            log.info(f"Successfully loaded and calculated: {loaded_recipe.name}")
+            #log.info(f"Successfully loaded and calculated: {loaded_recipe.name}")
 
         except Exception as e:
             log.error(f"Load Error: {e}")

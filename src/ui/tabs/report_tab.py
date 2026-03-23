@@ -23,8 +23,9 @@ except ImportError:
 class RecipeReportWidget(QWidget):
     """Widget for viewing and printing the recipe"""
 
-    def __init__(self, calculator: SoapCalculator):
+    def __init__(self, view, calculator: SoapCalculator):
         super().__init__()
+        self.view = view
         self.calculator = calculator
         self.setup_ui()
 
@@ -47,11 +48,12 @@ class RecipeReportWidget(QWidget):
 
         # Viewer
         self.viewer = QTextBrowser()
+
         layout.addWidget(self.viewer)
 
         self.setLayout(layout)
 
-    def refresh_report(self, recipe_name="Current Recipe", notes=""):
+    def refresh_report(self, recipe_name=None, notes=None):
         """Generate HTML report"""
         props = self.calculator.get_batch_properties()
         unit = self.calculator.unit_system
@@ -60,6 +62,14 @@ class RecipeReportWidget(QWidget):
         fa_profile = props.get("fa_breakdown", {})
 
         label_html = self.generate_label_html(props)
+
+        # If no name is passed in, try to get it from the calculator
+        if hasattr(self.view, 'current_recipe'):
+            recipe_name = getattr(self.view.current_recipe, 'name', 'Untitled Recipe')
+
+        # If no notes are passed in, try to get them from the calculator
+        if not notes:
+            notes = getattr(self.calculator, 'notes', '')
 
         # Define ranges for qualities
         quality_ranges = [
