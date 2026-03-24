@@ -86,9 +86,7 @@ class RecipeController:
 
             if is_mb:
                 results_widget = self.view.recipe_settings
-                results_widget.target_conc_spin.setVisible(True)
-                results_widget.water_method_combo.setVisible(False)
-                results_widget.water_value_spinbox.setVisible(False)
+
 
 
                 target_final = settings.target_conc_spin.value()
@@ -104,10 +102,10 @@ class RecipeController:
             results_widget = self.view.results_widget
 
             bar_size = results_widget.bar_size_spin.value()
-            log.debug(f"Bar Size: {bar_size}")
+            #log.debug(f"Bar Size: {bar_size}")
 
             pkg_cost = results_widget.pkg_cost_spin.value()
-            log.debug(f"Package Cost: {pkg_cost}")
+            #log.debug(f"Package Cost: {pkg_cost}")
 
             total_batch_weight = results.get('total_batch_weight', 0.0)
 

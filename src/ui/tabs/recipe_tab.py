@@ -37,7 +37,8 @@ class RecipeTab(QWidget):
         self.controller = recipe_controller
         self.notes_widget = RecipeNotesWidget()
         self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
-
+        #Bridge
+        self.parameters = RecipeParametersWidget(self.calculator, parent=self)
         # 3. Setup UI
         self.setup_ui()
 
@@ -657,6 +658,7 @@ class CalculationResultsWidget(QWidget):
         self.cost_manager = cost_manager
         self.mode = mode
         self.recipe_main = parent
+        self.parameters = RecipeParametersWidget(calculator, parent=self)
 
         self.weight_labels = {}
         self.row_widgets = {}
@@ -692,7 +694,7 @@ class CalculationResultsWidget(QWidget):
         # --- Masterbatch Rows (Hidden by default) ---
         self.mb_pour_label = QLabel("MB Liquid Pour:")
         self.mb_pour_value = QLabel("0.00")
-        self.extra_water_label = QLabel("Extra Water to Add:")
+        self.extra_water_label = QLabel("Extra Water:")
         self.extra_water_value = QLabel("0.00")
         weights_layout.addRow(self.mb_pour_label, self.mb_pour_value)
         weights_layout.addRow(self.extra_water_label, self.extra_water_value)
@@ -728,15 +730,9 @@ class CalculationResultsWidget(QWidget):
 
         layout.addStretch()
 
-    #def _on_yield_change(self):
-        #"""Refreshes display using last known calculation data."""
-        #if self.last_properties:
-            #self.update_display(self.last_properties)
-
     def update_display(self, results):
             """Receives pre-calculated data and updates labels on screen."""
             # 1. Type Safety Check (Prevents the 'float' has no attribute 'get' crash)
-
             if not isinstance(results, dict): return
             #print(f"DEBUG: Weight: {results.get('total_oil_weight')} | Cost: {results.get('total_batch_cost')}")
 
@@ -767,7 +763,7 @@ class CalculationResultsWidget(QWidget):
 
             # 4. Masterbatch UI Logic
             is_mb = results.get('is_masterbatch', False)
-
+            log.debug(f"{is_mb}")
             # Toggle visibility of MB specific rows
             self.mb_pour_label.setVisible(is_mb)
             self.mb_pour_value.setVisible(is_mb)
@@ -793,7 +789,7 @@ class CalculationResultsWidget(QWidget):
 
             # Use 1 decimal for yield (e.g., 10.5 bars) and 2 for money
             self.yield_label.setText(f"{est_yield:.1f} units")
-            log.debug(f"Setting Label Text {self.yield_label.text()}")
+            #log.debug(f"Setting Label Text {self.yield_label.text()}")
             self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
 class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
@@ -848,7 +844,20 @@ class RecipeParametersWidget(QWidget):
         self.target_conc_label.setVisible(False)
         self.target_conc_spin.setVisible(False)
 
+        self.masterbatch_check.stateChanged.connect(self.on_masterbatch_check)
+
+
+
+    def on_masterbatch_check(self, checked):
+        self.target_conc_label.setVisible(checked)
+        self.target_conc_spin.setVisible(checked)
+        self.water_method_combo.setVisible(not checked)
+        self.water_value_spinbox.setVisible(not checked)
+        self.water_value_label.setVisible(not checked)
+
+
     # ADD THIS NEW METHOD
+
     def on_water_method_changed(self, text):
         """Update label and spinbox range based on water method"""
         if text == "Water:Lye Ratio":
