@@ -656,6 +656,7 @@ class CalculationResultsWidget(QWidget):
         self.calculator = calculator
         self.cost_manager = cost_manager
         self.mode = mode
+        self.recipe_main = parent
 
         self.weight_labels = {}
         self.row_widgets = {}
@@ -694,7 +695,7 @@ class CalculationResultsWidget(QWidget):
         self.extra_water_label = QLabel("Extra Water to Add:")
         self.extra_water_value = QLabel("0.00")
         weights_layout.addRow(self.mb_pour_label, self.mb_pour_value)
-        weights_layout.addRow(self.extra_water_value, self.extra_water_value)
+        weights_layout.addRow(self.extra_water_label, self.extra_water_value)
 
         # --- Yield Estimation Group ---
         yield_group = QGroupBox("Yield Estimation")
@@ -702,10 +703,12 @@ class CalculationResultsWidget(QWidget):
 
         self.bar_size_spin = QDoubleSpinBox()
         self.bar_size_spin.setRange(0.1, 1000)
+        self.bar_size_spin.setSingleStep(0.5)
         self.bar_size_spin.setValue(4.5)
 
         self.pkg_cost_spin = QDoubleSpinBox()
         self.pkg_cost_spin.setRange(0, 100)
+        self.pkg_cost_spin.setSingleStep(0.1)
         self.pkg_cost_spin.setPrefix("$")
 
         self.yield_label = QLabel("0.0 units")
@@ -720,15 +723,15 @@ class CalculationResultsWidget(QWidget):
         layout.addWidget(yield_group)
 
         # Connect signals to refresh display if yield settings change
-        self.bar_size_spin.valueChanged.connect(self._on_yield_change)
-        self.pkg_cost_spin.valueChanged.connect(self._on_yield_change)
+        self.bar_size_spin.valueChanged.connect(self.recipe_main.controller.update_calculations)
+        self.pkg_cost_spin.valueChanged.connect(self.recipe_main.controller.update_calculations)
 
         layout.addStretch()
 
-    def _on_yield_change(self):
-        """Refreshes display using last known calculation data."""
-        if self.last_properties:
-            self.update_display(self.last_properties)
+    #def _on_yield_change(self):
+        #"""Refreshes display using last known calculation data."""
+        #if self.last_properties:
+            #self.update_display(self.last_properties)
 
     def update_display(self, results):
             """Receives pre-calculated data and updates labels on screen."""
@@ -790,6 +793,7 @@ class CalculationResultsWidget(QWidget):
 
             # Use 1 decimal for yield (e.g., 10.5 bars) and 2 for money
             self.yield_label.setText(f"{est_yield:.1f} units")
+            log.debug(f"Setting Label Text {self.yield_label.text()}")
             self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
 class RecipeParametersWidget(QWidget):
     """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
@@ -860,6 +864,9 @@ class RecipeParametersWidget(QWidget):
             self.water_value_spinbox.setRange(1, 99)
             self.water_value_spinbox.setValue(33.0)
 
+    def on_mb_change(self, value):
+        self.controller.update_calculations(value)
+        return
 class RecipeNotesWidget(QWidget):
     """Widget for recipe notes and instructions"""
 

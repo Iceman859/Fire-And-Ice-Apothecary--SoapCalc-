@@ -33,7 +33,7 @@ class RecipeController:
 
                 # CRITICAL: Ensure calculator knows the current unit system
                 # (this is set in MainWindow, but verify it here)
-                log.debug(f"Current unit_system: {unit_system}")
+                #log.debug(f"Current unit_system: {unit_system}")
 
                 # 1. Sync settings from UI to Calculator
                 settings = self.view.recipe_tab.recipe_settings
@@ -85,6 +85,12 @@ class RecipeController:
             results['is_masterbatch'] = is_mb
 
             if is_mb:
+                results_widget = self.view.recipe_settings
+                results_widget.target_conc_spin.setVisible(True)
+                results_widget.water_method_combo.setVisible(False)
+                results_widget.water_value_spinbox.setVisible(False)
+
+
                 target_final = settings.target_conc_spin.value()
                 lye_grams = results.get('lye_weight', 0)  # This should be the original gram value
                 mb_math = self.calculator.calculate_masterbatch_pour(
@@ -95,17 +101,32 @@ class RecipeController:
                 results.update(mb_math)
 
             # 5. Yield & Unit Cost Calculation
-            results_widget = self.view.recipe_tab.results_widget
+            results_widget = self.view.results_widget
+
             bar_size = results_widget.bar_size_spin.value()
+            log.debug(f"Bar Size: {bar_size}")
+
             pkg_cost = results_widget.pkg_cost_spin.value()
+            log.debug(f"Package Cost: {pkg_cost}")
 
             total_batch_weight = results.get('total_batch_weight', 0.0)
+
+
             if bar_size > 0:
-                results['yield'] = total_batch_weight / bar_size
-                if results['yield'] > 0:
-                    results['total_batch_cost'] += pkg_cost
+                # 1. How many bars? (Total Weight / Size of one bar)
+                results['est_yield'] = total_batch_weight / bar_size
+
+                if results['est_yield'] > 0:
+                    # 2. Add the packaging cost to the big total
+                    results['total_batch_cost'] += (pkg_cost * results['est_yield'])
+
+                    # 3. THE MISSING PIECE: Divide the Big Total Cost by the Number of Bars
+                    results['cost_per_unit'] = results['total_batch_cost'] / results['est_yield']
+                else:
+                    results['cost_per_unit'] = 0.0
             else:
-                results['yield'] = 0.0
+                results['est_yield'] = 0.0
+                results['cost_per_unit'] = 0.0
 
             # 6. Push to Results Widget
             results_widget.update_display(results)
