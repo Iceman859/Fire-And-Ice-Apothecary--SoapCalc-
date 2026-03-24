@@ -20,12 +20,26 @@ class RecipeController:
     def update_calculations(self):
         """Main calculation engine. Pulls from UI, runs math, pushes to UI."""
         try:
-            # 1. Sync settings from UI to Calculator
-            settings = self.view.recipe_tab.recipe_settings
 
-            # Sync Unit System from Model to Calculator
-            unit_system = getattr(self.view.recipe_model, 'unit_system', 'grams')
-            self.calculator.set_unit_system(unit_system)
+            if hasattr(self.view.recipe_tab, 'recipe_model'):
+                self.view.recipe_tab.recipe_model.unit_system = self.calculator.unit_system
+            # 0. SYNC UNIT SYSTEM TO MODEL AND CALCULATOR
+                # Get the current unit from calculator
+                unit_system = self.calculator.unit_system
+
+                # Sync to model FIRST
+                if hasattr(self.view, 'recipe_model'):
+                    self.view.recipe_model.unit_system = unit_system
+
+                # CRITICAL: Ensure calculator knows the current unit system
+                # (this is set in MainWindow, but verify it here)
+                log.debug(f"Current unit_system: {unit_system}")
+
+                # 1. Sync settings from UI to Calculator
+                settings = self.view.recipe_tab.recipe_settings
+
+            # Sync Unit System
+            unit_system = self.calculator.unit_system  # Use calculator's unit directly
 
             # Superfat
             sf = settings.superfat_spinbox.value()
@@ -45,97 +59,82 @@ class RecipeController:
             method_val = settings.water_value_spinbox.value()
             self.calculator.set_water_calc_method(method_key, method_val)
 
-            # Masterbatch sync
-            is_mb = settings.masterbatch_check.isChecked()
-            if hasattr(self.calculator, 'use_masterbatch'):
-                self.calculator.use_masterbatch = is_mb
-
-            # 2. CRITICAL: Force Calculator Refresh
-            # This ensures that if we just loaded a recipe, the calculator knows
-            # it has oils before we ask for properties.
-            if hasattr(self.calculator, '_calculate_batch'):
-                self.calculator._calculate_batch()
-
-            # 3. Perform math in the Calculator
+            # 2. Perform math in the Calculator (this handles unit conversion internally)
             results = self.calculator.get_batch_properties()
+            results['unit_system_abbr'] = self.calculator.get_unit_abbreviation()
 
-            # 4. MANUALLY DETERMINE CONVERSION (To match RecipeTableModel exactly)
-            if unit_system == "ounces":
-                abbr = "oz"
-                conv = 28.3495231
-            elif unit_system == "pounds":
-                abbr = "lb"
-                conv = 453.592
-            else:
-                abbr = "g"
-                conv = 1.0
-
-            # 5. Calculate Financials directly from current oils
-            # This bypasses any stale data in the results dictionary
+            # 3. Calculate Financials from current oils
             total_cost = 0.0
-            total_oil_weight_g = 0.0
-
             for oil_name, weight_g in self.calculator.oils.items():
-                total_oil_weight_g += weight_g
                 if self.cost_manager:
                     cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
-                    total_cost += cost_per_g * weight_g
+                    if cost_per_g:
+                        total_cost += cost_per_g * weight_g
 
-            # 6. MAP DATA TO UI
-            def get_grams(key_base, fallback_val=0.0):
-                # Try specific gram key, then base key
-                val = results.get(f"{key_base}_grams")
-                if val is None:
-                    val = results.get(key_base)
-                return float(val) if val is not None else fallback_val
+            # Add additive costs
+            for additive_name, weight_g in self.calculator.additives.items():
+                if self.cost_manager:
+                    cost_per_g = self.cost_manager.get_cost_per_gram(additive_name)
+                    if cost_per_g:
+                        total_cost += cost_per_g * weight_g
 
-            # If total_oil_weight_g is 0 but calculator has oils, use our manual sum
-            oil_weight_to_use = get_grams('total_oil_weight', total_oil_weight_g)
-            if oil_weight_to_use == 0 and total_oil_weight_g > 0:
-                oil_weight_to_use = total_oil_weight_g
+            results['total_batch_cost'] = total_cost
 
-            ui_data = {
-                'unit_system_abbr': abbr,
-                'is_masterbatch': is_mb,
+            # 4. Masterbatch Logic (if enabled)
+            is_mb = settings.masterbatch_check.isChecked()
+            results['is_masterbatch'] = is_mb
 
-                'total_oil_weight': oil_weight_to_use / conv,
-                'water_weight': get_grams('water_weight') / conv,
-                'lye_weight': get_grams('lye_weight') / conv,
-                'total_batch_weight': get_grams('total_batch_weight') / conv,
-                'additional_water': get_grams('additional_water') / conv,
+            if is_mb:
+                target_final = settings.target_conc_spin.value()
+                lye_grams = results.get('lye_weight', 0)  # This should be the original gram value
+                mb_math = self.calculator.calculate_masterbatch_pour(
+                    target_lye_grams=lye_grams,
+                    mb_concentration=50.0,
+                    final_target_conc=target_final
+                )
+                results.update(mb_math)
 
-                'total_batch_cost': total_cost,
-                'est_yield': 0.0,
-                'cost_per_unit': 0.0,
-
-                'mb_liquid_pour': get_grams('mb_liquid_pour') / conv,
-                'extra_water_to_add': get_grams('extra_water_to_add') / conv
-            }
-
-            # 7. Yield & Unit Cost Calculation
+            # 5. Yield & Unit Cost Calculation
             results_widget = self.view.recipe_tab.results_widget
             bar_size = results_widget.bar_size_spin.value()
             pkg_cost = results_widget.pkg_cost_spin.value()
 
+            total_batch_weight = results.get('total_batch_weight', 0.0)
             if bar_size > 0:
-                ui_data['est_yield'] = ui_data['total_batch_weight'] / bar_size
-                if ui_data['est_yield'] > 0:
-                    ui_data['cost_per_unit'] = (total_cost / ui_data['est_yield']) + pkg_cost
+                results['yield'] = total_batch_weight / bar_size
+                if results['yield'] > 0:
+                    results['total_batch_cost'] += pkg_cost
+            else:
+                results['yield'] = 0.0
 
-            # 8. Push to Results Widget
-            results_widget.update_display(ui_data)
+            # 6. Push to Results Widget
+            results_widget.update_display(results)
 
-            # 9. Solution Warning
-            conc = self.calculator.lye_concentration
-            # Ensure it's in percentage format (0.33 -> 33)
-            if conc < 1.0:
-                conc *= 100
+            # 7. Update Tables (with model refresh)
+            self.view._suppress_oils_table_signals = True
+            self.view._suppress_additives_table_signals = True
 
-            if hasattr(self.view.recipe_tab, 'update_solution_warning'):
-                self.view.recipe_tab.update_solution_warning(conc)
+            try:
+                # Refresh the oils table model
+                if hasattr(self.view.recipe_tab, 'recipe_model'):
+                    self.view.recipe_tab.recipe_model.layoutChanged.emit()
+
+                # Update additives table (still using old method if it exists)
+                if hasattr(self.view, 'update_additives_table'):
+                    self.view.update_additives_table()
+            except Exception as e:
+                log.error(f"Table refresh failed: {e}")
+            finally:
+                # CRITICAL: Re-enable signals
+                self.view._suppress_oils_table_signals = False
+                self.view._suppress_additives_table_signals = False
+
+                #SEND THE BATSIGNAL
+                if hasattr(self.view, 'recipe_model'):
+                    self.view.recipe_model.layoutChanged.emit()
 
         except Exception as e:
-            log.error(f"Error in update_calculations: {e}")
+            log.error(f"Error in update_calculations: {e}", exc_info=True)
 
     def refresh_additives_table(self):
         """Manually populates the additive QTableWidget from the calculator data."""
@@ -285,7 +284,7 @@ class RecipeController:
             self.view.current_recipe = loaded
 
             # 2. IMPORTANT: Tell the UI the table has changed
-            if hasattr(self.view, 'recipe_model'):
+            if hasattr(self.view.recipe_tab, 'recipe_model'):
                 self.view.recipe_model.refresh()
 
             # 3. Now run the math (it will see the new rows)

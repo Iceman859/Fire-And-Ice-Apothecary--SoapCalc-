@@ -38,10 +38,6 @@ class RecipeTab(QWidget):
         self.notes_widget = RecipeNotesWidget()
         self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
 
-        # 1. Create the parameters widget and NAME IT EXACTLY what the controller expects
-        self.recipe_settings = RecipeParametersWidget(self.calculator)
-        # 2. Create the results widget and NAME IT EXACTLY what the controller expects
-        self.results_widget = CalculationResultsWidget(self.calculator)
         # 3. Setup UI
         self.setup_ui()
 
@@ -103,7 +99,7 @@ class RecipeTab(QWidget):
             self.oils_table = QTableView()
 
             # 2. Create the model (using the template from the previous message)
-            self.recipe_model = RecipeTableModel(self.calculator)
+            self.recipe_model = RecipeTableModel(self.calculator, self.controller, self.cost_manager)
 
             # 3. Connect them
             self.oils_table.setModel(self.recipe_model)
@@ -676,7 +672,6 @@ class CalculationResultsWidget(QWidget):
         weight_rows = [
             "Total Oil Weight",
             "Water Weight",
-            "Add'l Water",
             "Lye Weight",
             "Total Batch Weight",
             "Total Batch Cost"
@@ -751,7 +746,6 @@ class CalculationResultsWidget(QWidget):
             mapping = {
                 "Total Oil Weight": "total_oil_weight",
                 "Water Weight": "water_weight",
-                "Add'l Water": "additional_water",
                 "Lye Weight": "lye_weight",
                 "Total Batch Weight": "total_batch_weight",
                 "Total Batch Cost": "total_batch_cost"
@@ -823,10 +817,13 @@ class RecipeParametersWidget(QWidget):
         self.water_method_label = QLabel("Water Calculation:")
         self.water_method_combo = QComboBox()
         self.water_method_combo.addItems(["Water:Lye Ratio", "Water % of Oils", "Lye Concentration"])
+        self.water_method_combo.currentTextChanged.connect(self.on_water_method_changed)  # ADD THIS
         layout.addWidget(self.water_method_label)
         layout.addWidget(self.water_method_combo)
 
         self.water_value_spinbox = QDoubleSpinBox()
+        self.water_value_spinbox.setRange(0, 100)  # Set appropriate range
+        self.water_value_spinbox.setValue(2.0)  # Default ratio
         self.water_value_label = QLabel("Ratio:")
         layout.addWidget(self.water_value_label)
         layout.addWidget(self.water_value_spinbox)
@@ -846,6 +843,22 @@ class RecipeParametersWidget(QWidget):
         # INITIAL VISIBILITY
         self.target_conc_label.setVisible(False)
         self.target_conc_spin.setVisible(False)
+
+    # ADD THIS NEW METHOD
+    def on_water_method_changed(self, text):
+        """Update label and spinbox range based on water method"""
+        if text == "Water:Lye Ratio":
+            self.water_value_label.setText("Ratio:")
+            self.water_value_spinbox.setRange(1.0, 5.0)
+            self.water_value_spinbox.setValue(2.0)
+        elif text == "Water % of Oils":
+            self.water_value_label.setText("Water %:")
+            self.water_value_spinbox.setRange(0, 100)
+            self.water_value_spinbox.setValue(38.0)
+        elif text == "Lye Concentration":
+            self.water_value_label.setText("Concentration %:")
+            self.water_value_spinbox.setRange(1, 99)
+            self.water_value_spinbox.setValue(33.0)
 
 class RecipeNotesWidget(QWidget):
     """Widget for recipe notes and instructions"""

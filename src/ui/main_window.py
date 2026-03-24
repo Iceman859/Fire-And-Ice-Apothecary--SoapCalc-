@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
             self.scale_spinbox = self.recipe_tab.scale_spinbox
             self.calculator.total_batch_weight = 32.0
             # 5. SAFE STARTUP SEQUENCE
-            self.recipe_model = RecipeTableModel(self.calculator)
+            self.recipe_model = RecipeTableModel(self.calculator, self.controller, self.cost_manager)
             self.oils_table.setModel(self.recipe_model)
             # First: Connect the wires
             self.connect_signals()
@@ -254,6 +254,14 @@ class MainWindow(QMainWindow):
             #self.oil_input_widget.oil_added.connect(self.controller.update_oils_table)
             self.oil_input_widget.oil_added.connect(self.controller.update_calculations)
             self.oil_input_widget.target_weight_callback = lambda: self.calculator.total_batch_weight
+
+            # Recipe parameter changes (Lye Type, Superfat, Water settings)
+            self.recipe_tab.recipe_settings.lye_combo.currentTextChanged.connect(self.on_recipe_modified)
+            self.recipe_tab.recipe_settings.superfat_spinbox.valueChanged.connect(self.on_recipe_modified)
+            self.recipe_tab.recipe_settings.water_method_combo.currentTextChanged.connect(self.on_recipe_modified)
+            self.recipe_tab.recipe_settings.water_value_spinbox.valueChanged.connect(self.on_recipe_modified)
+            self.recipe_tab.recipe_settings.masterbatch_check.toggled.connect(self.on_recipe_modified)
+            self.recipe_tab.recipe_settings.target_conc_spin.valueChanged.connect(self.on_recipe_modified)
 
     def on_tab_changed(self, index):
         """Handle tab changes"""

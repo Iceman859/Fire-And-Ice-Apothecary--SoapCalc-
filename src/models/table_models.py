@@ -3,13 +3,12 @@ from src.utils.logger import log
 
 class RecipeTableModel(QAbstractTableModel):
     """Model to handle the oils list in the recipe tab."""
-
-    def __init__(self, calculator, controller=None):
+    def __init__(self, calculator, controller=None, cost_manager=None):
         super().__init__()
         self.calculator = calculator
-        self.controller = controller # Need reference to trigger updates
+        self.controller = controller
+        self.cost_manager = cost_manager  # <-- Now it gets set!
         self.unit_system = "grams"
-        self.cost_manager = None
         self.headers = ["Oil Name", "Weight", "Unit", "%", "Cost"]
 
     def rowCount(self, parent=None):
