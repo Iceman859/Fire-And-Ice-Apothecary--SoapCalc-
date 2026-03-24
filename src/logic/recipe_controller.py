@@ -1,420 +1,301 @@
 import json
 import os
-from PyQt6.QtWidgets import QInputDialog,QFileDialog
-from pathlib import Path
-from src.models.recipe import Recipe, RecipeManager
+from PyQt6.QtWidgets import QInputDialog, QFileDialog, QMessageBox, QTableWidgetItem
+from PyQt6.QtCore import Qt
+from src.models.recipe import Recipe
 from src.utils.logger import log
-from src.ui.tabs import  RecipeParametersWidget, CalculationResultsWidget
-from src.models.cost_manager import CostManager
 
-#RecipeController: The Mastermind of Recipe Management
+
+from src.utils.logger import log
+
 class RecipeController:
-    #init
-    def __init__(self, view, calculator, cost_manager, recipe_manager):
+    def __init__(self, view, calculator, cost_manager, recipe_manager, batch_manager):
+        """Restored full signature to match MainWindow initialization."""
         self.view = view
         self.calculator = calculator
         self.cost_manager = cost_manager
         self.recipe_manager = recipe_manager
-        self.current_recipe = self.view.current_recipe
-        self._calculating = False
+        self.batch_manager = batch_manager
 
-    #Universal Calculation Update
     def update_calculations(self):
-        """Refreshes all math, unit labels, and identity markers with extensive trace logging."""
-        #log.debug("Starting Universal Calculation Update")
-    # --- STEP 0: SYNC UI TO CALCULATOR (The 'Pull') ---
-        # This ensures the calculator has the LATEST info before doing math
+        """Main calculation engine. Pulls from UI, runs math, pushes to UI."""
         try:
+            # 1. Sync settings from UI to Calculator
             settings = self.view.recipe_tab.recipe_settings
 
-            # Pull Superfat
-            self.calculator.set_superfat(settings.superfat_spinbox.value())
-            #log.debug(f"Superfat set to: {self.calculator.superfat_percent}")
-            # Pull Lye Type
+            # Sync Unit System from Model to Calculator
+            unit_system = getattr(self.view.recipe_model, 'unit_system', 'grams')
+            self.calculator.set_unit_system(unit_system)
+
+            # Superfat
+            sf = settings.superfat_spinbox.value()
+            self.calculator.set_superfat(sf)
+
+            # Lye Type
             self.calculator.set_lye_type(settings.lye_combo.currentText())
-            #log.debug(f"Lye type set to: {self.calculator.lye_type}")
 
-            # Pull Water (This replaces the need for the loop-heavy sync_settings)
-            method_text = settings.water_method_combo.currentText()
-            val = settings.water_value_spinbox.value()
-
-            mapping = {
+            # Water calculation method
+            method_map = {
                 "Water:Lye Ratio": "ratio",
                 "Water % of Oils": "percent",
                 "Lye Concentration": "concentration"
             }
-            method = mapping.get(method_text, "ratio")
-            self.calculator.set_water_calc_method(method, val)
-            #log.debug(f"Water calculation method set to: {self.calculator.water_calc_method}")
+            method_text = settings.water_method_combo.currentText()
+            method_key = method_map.get(method_text, "ratio")
+            method_val = settings.water_value_spinbox.value()
+            self.calculator.set_water_calc_method(method_key, method_val)
 
+            # Masterbatch sync
+            is_mb = settings.masterbatch_check.isChecked()
+            if hasattr(self.calculator, 'use_masterbatch'):
+                self.calculator.use_masterbatch = is_mb
 
-        except Exception as e:
-            log.error(f"Failed to pull UI data into calculator: {e}")
+            # 2. CRITICAL: Force Calculator Refresh
+            # This ensures that if we just loaded a recipe, the calculator knows
+            # it has oils before we ask for properties.
+            if hasattr(self.calculator, '_calculate_batch'):
+                self.calculator._calculate_batch()
 
-        # --- STEP 1: CALCULATE (The 'Math') ---
-        # Now when you call this, it uses the values we just pulled above!
-        results = self.calculator.get_batch_properties()
-        #log.debug("--- Starting Universal Calculation Update ---")
-
-        # 1. Unit & Calculator Sync
-        try:
-            unit_pref = self.view._settings.value("unit_system", "grams").lower()
-            self.calculator.unit_system = unit_pref
-            #log.debug(f"Unit system synchronized to: {unit_pref}")
-        except Exception as e:
-            log.error(f"Failed to sync unit settings: {e}")
-
-        # 2. Base Properties Retrieval
-        try:
+            # 3. Perform math in the Calculator
             results = self.calculator.get_batch_properties()
-            results['unit_system_abbr'] = self.calculator.get_unit_abbreviation()
-            #log.debug(f"Base batch properties retrieved: {list(results.keys())}")
-        except Exception as e:
-            #log.error(f"Calculator failed to provide batch properties: {e}")
-            results = {} # Fallback to prevent crashes in later steps
 
-        # 3. Masterbatch Logic
-        try:
-            settings_ui = self.view.recipe_tab.recipe_settings
-            is_mb = settings_ui.masterbatch_check.isChecked()
-            results['is_masterbatch'] = is_mb
+            # 4. MANUALLY DETERMINE CONVERSION (To match RecipeTableModel exactly)
+            if unit_system == "ounces":
+                abbr = "oz"
+                conv = 28.3495231
+            elif unit_system == "pounds":
+                abbr = "lb"
+                conv = 453.592
+            else:
+                abbr = "g"
+                conv = 1.0
 
-            if is_mb:
-                target_final = settings_ui.target_conc_spin.value()
-                log.debug(f"Calculating Masterbatch: Lye={results.get('lye_weight')}g, Target={target_final}%")
-                mb_math = self.calculator.calculate_masterbatch_pour(
-                    target_lye_grams=results.get('lye_weight', 0),
-                    mb_concentration=50.0,
-                    final_target_conc=target_final
-                )
-                results.update(mb_math)
-        except AttributeError as e:
-            log.warning(f"Masterbatch UI elements missing or uninitialized: {e}")
-        except Exception as e:
-            log.error(f"Masterbatch math error: {e}")
+            # 5. Calculate Financials directly from current oils
+            # This bypasses any stale data in the results dictionary
+            total_cost = 0.0
+            total_oil_weight_g = 0.0
 
-        # 4. Costs & Yield (The 'Fragile' Section)
-        total_cost = 0.0
-        try:
-            if self.cost_manager:
-                # Check Oils
-                for name, weight in self.calculator.oils.items():
-                    cost = self.cost_manager.get_cost_per_gram(name)
-                    if cost is None:
-                        log.warning(f"Cost missing for Oil: '{name}'. Defaulting to 0.0")
-                        cost = 0.0
-                    total_cost += (weight * cost)
+            for oil_name, weight_g in self.calculator.oils.items():
+                total_oil_weight_g += weight_g
+                if self.cost_manager:
+                    cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
+                    total_cost += cost_per_g * weight_g
 
-                # Check Additives
-                for name, weight in self.calculator.additives.items():
-                    cost = self.cost_manager.get_cost_per_gram(name)
-                    if cost is None:
-                        log.warning(f"Cost missing for Additive: '{name}'. Defaulting to 0.0")
-                        cost = 0.0
-                    total_cost += (weight * cost)
+            # 6. MAP DATA TO UI
+            def get_grams(key_base, fallback_val=0.0):
+                # Try specific gram key, then base key
+                val = results.get(f"{key_base}_grams")
+                if val is None:
+                    val = results.get(key_base)
+                return float(val) if val is not None else fallback_val
 
-            results['total_batch_cost'] = total_cost
-            #log.debug(f"Total ingredient cost calculated: {total_cost}")
+            # If total_oil_weight_g is 0 but calculator has oils, use our manual sum
+            oil_weight_to_use = get_grams('total_oil_weight', total_oil_weight_g)
+            if oil_weight_to_use == 0 and total_oil_weight_g > 0:
+                oil_weight_to_use = total_oil_weight_g
 
-            # Packaging & Yield
-            res_widget = self.view.recipe_tab.results_widget
-            results['packaging_cost'] = res_widget.ypacking_cost_spin.value()
-            results['total_batch_cost'] += results['packaging_cost']
+            ui_data = {
+                'unit_system_abbr': abbr,
+                'is_masterbatch': is_mb,
 
-            total_weight = results.get('total_batch_weight', 0.0)
-            bar_size = res_widget.bar_size_spin.value()
-            results['yield'] = total_weight / bar_size if bar_size > 0 else 0.0
+                'total_oil_weight': oil_weight_to_use / conv,
+                'water_weight': get_grams('water_weight') / conv,
+                'lye_weight': get_grams('lye_weight') / conv,
+                'total_batch_weight': get_grams('total_batch_weight') / conv,
+                'additional_water': get_grams('additional_water') / conv,
 
-        except Exception as e:
-            log.error(f"Cost/Yield calculation block failed: {e}")
+                'total_batch_cost': total_cost,
+                'est_yield': 0.0,
+                'cost_per_unit': 0.0,
 
-        # 5. UI Updates
-        try:
-            self.view.recipe_tab.results_widget.update_display(results)
-
-            # Name Sync
-            recipe_name = getattr(self.view.current_recipe, 'name', "New Recipe")
-            if hasattr(self.view.recipe_tab.results_widget, 'recipe_name_label'):
-                self.view.recipe_tab.results_widget.recipe_name_label.setText(recipe_name)
-
-            if hasattr(self.view, 'update_scale_label'):
-                self.view.update_scale_label()
-            #log.debug("UI labels and display widgets updated.")
-        except Exception as e:
-            log.error(f"UI display update failed: {e}")
-
-        # 6. Table Refreshes (With Signal Safety)
-        try:
-            #log.debug("Refreshing UI tables...")
-            self.view._suppress_oils_table_signals = True
-            self.view._suppress_additives_table_signals = True
-
-            self.view.update_oils_table()
-            self.view.update_additives_table()
-
-        except Exception as e:
-            log.error(f"Table refresh failed: {e}")
-        finally:
-            # Crucial: Always re-enable signals even if refresh fails
-            self.view._suppress_oils_table_signals = False
-            self.view._suppress_additives_table_signals = False
-            #log.debug("Table signals re-enabled.")
-
-        #log.debug("--- Calculation Update Complete ---")
-
-    #Perform Save with Manual JSON Patching
-    def perform_save(self):
-        """Saves recipe with manual JSON additive patching and updated UI paths."""
-        name, ok = QInputDialog.getText(
-            self.view, "Save Recipe", "Recipe Name:", text=self.view.current_recipe.name
-        )
-        if ok and name:
-            self.view.current_recipe.name = name
-            # Sync calculator state to recipe object
-            r = self.view.current_recipe
-            r.oils = self.calculator.oils.copy()
-            r.additives = self.calculator.additives.copy()
-            r.lye_type = self.calculator.lye_type
-            r.water_calc_method = self.calculator.water_calc_method
-            r.water_to_lye_ratio = self.calculator.water_to_lye_ratio
-            r.water_percent = self.calculator.water_percent
-            r.lye_concentration = self.calculator.lye_concentration
-            r.superfat_percent = self.calculator.superfat_percent
-
-            # The manager saves the base file
-            filepath = self.recipe_manager.save_recipe(r)
-
-            if filepath:
-                try:
-                    # RE-OPEN to patch in the extra bits manually
-                    with open(filepath, "r") as f:
-                        data = json.load(f)
-
-                    # UPDATE: Using the new nested path for notes
-                    data["additives"] = self.calculator.additives
-                    data["notes"] = self.view.recipe_tab.notes_widget.get_notes()  # <--- FIXED PATH
-
-                    temp_path = f"{filepath}.tmp"
-                    with open(temp_path, "w") as f:
-                        json.dump(data, f, indent=4)
-                    os.replace(temp_path, filepath)
-
-                    # Refresh the manager list so the new file shows up immediately
-                    self.view.manager_widget.refresh_recipe_list()
-
-                except (json.JSONDecodeError, IOError, OSError) as e:
-                    log.error(f"Manual JSON Save Error: {e}")
-                    if os.path.exists(f"{filepath}.tmp"):
-                        try:
-                            os.remove(f"{filepath}.tmp")
-                        except OSError:
-                            pass
-
-            self.update_calculations()
-    #Perform Load with UI Signal Blocking
-    def perform_load(self, filepath):
-        """Loads recipe"""
-        try:
-            with open(filepath, "r") as f:
-                data = json.load(f)
-
-            loaded_recipe = Recipe.from_dict(data)
-
-            # BLOCK UI SIGNALS
-            self.view.blockSignals(True)
-
-            try:
-                # 1. Update the reference
-                self.view.current_recipe = loaded_recipe
-
-                # 2. Update the calculator state
-                self.calculator.oils = loaded_recipe.oils.copy()
-                self.calculator.additives = data.get("additives", {}).copy()
-                self.calculator.water_calc_method = loaded_recipe.water_calc_method
-                self.calculator.water_to_lye_ratio = loaded_recipe.water_to_lye_ratio
-                self.calculator.water_percent = loaded_recipe.water_percent
-                self.calculator.lye_concentration = loaded_recipe.lye_concentration
-                self.calculator.lye_type = loaded_recipe.lye_type
-                self.calculator.superfat_percent = loaded_recipe.superfat_percent
-
-                # 3. UPDATE: Push notes into the NEW widget location
-                notes = data.get("notes", "")
-                self.view.recipe_tab.notes_widget.set_notes(notes) # <--- FIXED PATH
-
-                # 4. Refresh visuals
-                self.view.update_oils_table()
-                #used to be self.view.controller.update_calculations()
-                self.update_calculations()
-
-
-            finally:
-                self.view.blockSignals(False)
-
-            #log.debug(f"Widget children: {dir(self.view.recipe_tab.recipe_settings)}")
-            # Update UI controls to match loaded values
-            self.view.recipe_tab.recipe_settings.superfat_spinbox.setValue(self.calculator.superfat_percent)
-            self.view.recipe_tab.recipe_settings.lye_combo.setCurrentText(self.calculator.lye_type)
-            method_to_text = {
-                "ratio": "Water:Lye Ratio",
-                "percent": "Water % of Oils",
-                "concentration": "Lye Concentration"
+                'mb_liquid_pour': get_grams('mb_liquid_pour') / conv,
+                'extra_water_to_add': get_grams('extra_water_to_add') / conv
             }
-            self.view.recipe_tab.recipe_settings.water_method_combo.setCurrentText(method_to_text.get(self.calculator.water_calc_method, "Water:Lye Ratio"))
 
-            #log.info(f"Successfully loaded and calculated: {loaded_recipe.name}")
+            # 7. Yield & Unit Cost Calculation
+            results_widget = self.view.recipe_tab.results_widget
+            bar_size = results_widget.bar_size_spin.value()
+            pkg_cost = results_widget.pkg_cost_spin.value()
+
+            if bar_size > 0:
+                ui_data['est_yield'] = ui_data['total_batch_weight'] / bar_size
+                if ui_data['est_yield'] > 0:
+                    ui_data['cost_per_unit'] = (total_cost / ui_data['est_yield']) + pkg_cost
+
+            # 8. Push to Results Widget
+            results_widget.update_display(ui_data)
+
+            # 9. Solution Warning
+            conc = self.calculator.lye_concentration
+            # Ensure it's in percentage format (0.33 -> 33)
+            if conc < 1.0:
+                conc *= 100
+
+            if hasattr(self.view.recipe_tab, 'update_solution_warning'):
+                self.view.recipe_tab.update_solution_warning(conc)
 
         except Exception as e:
-            log.error(f"Load Error: {e}")
-    #Oils Table Logic
-    def on_oil_cell_changed(self, row, column):
-        """Handle inline edits to oils table via the controller"""
-        if getattr(self.view, "_suppress_oils_table_signals", False):
-                return
-        self.view.on_recipe_modified()
+            log.error(f"Error in update_calculations: {e}")
 
-
-
-        if getattr(self.view, "_suppress_oils_table_signals", False):
+    def refresh_additives_table(self):
+        """Manually populates the additive QTableWidget from the calculator data."""
+        if not hasattr(self.view.recipe_tab, 'additives_table'):
             return
 
-        try:
-            # Access the row mapping stored in MainWindow
-            old_name = self.view._oils_rows[row]
-        except IndexError:
-            return
+        table = self.view.recipe_tab.additives_table
+        table.setRowCount(0)
 
-        # 1. Handle Name change (Column 0)
-        if column == 0:
-            item = self.view.recipe_tab.oils_table.item(row, 0)
-            if item:
-                new_name = item.text().strip()
-                if new_name and new_name != old_name:
-                    weight_grams = self.calculator.oils.pop(old_name, 0.0)
-                    self.calculator.oils[new_name] = weight_grams
-                    #self.view.update_results()
-                    self.update_calculations()
-                    self.view.update_oils_table()
-        # 2. Handle Weight change (Column 1)
-        elif column == 1:
-            item = self.view.recipe_tab.oils_table.item(row, 1)
-            if item:
-                try:
-                    display_value = float(item.text())
-                    grams = self.calculator.convert_to_grams(
-                        display_value, self.calculator.unit_system
-                    )
-                    self.calculator.oils[old_name] = grams
-                    #self.view.update_results()
-                    self.update_calculations()
-                    self.view.update_oils_table()
-                except ValueError as e:
-                    log.warning(f"Invalid weight in oils table row {row}: {e}")
+        unit = self.calculator.unit_system
+        conv = 28.3495231
 
-        # 3. Handle Percent change (Column 2)
-        elif column == 2:
-            item = self.view.recipe_tab.oils_table.item(row, 2)
-            if item:
-                try:
-                    percent = float(item.text())
-                    target_grams = self.view.recipe_tab.scale_spinbox.value()
-                    if target_grams <= 0:
-                        target_grams = self.calculator.get_total_oil_weight()
+        for name, weight_g in self.calculator.additives.items():
+            row = table.rowCount()
+            table.insertRow(row)
 
-                    self.calculator.oils[old_name] = target_grams * (percent / 100.0)
-                    #self.view.update_results()
-                    self.update_calculations()
-                    self.view.update_oils_table()
-                except ValueError as e:
-                    log.warning(f"Invalid percentage in oils table row {row}: {e}")
-    #Additives Table Logic
-    def on_additive_cell_changed(self, row, column):
+            # Name
+            table.setItem(row, 0, QTableWidgetItem(name))
 
+            # Weight Conversion
+            if unit == "ounces":
+                display_wt = f"{weight_g / conv:.2f}"
+                display_unit = "oz"
+            elif unit == "pounds":
+                display_wt = f"{(weight_g / conv) / 16:.3f}"
+                display_unit = "lbs"
+            else:
+                display_wt = f"{weight_g:.2f}"
+                display_unit = "g"
 
-        """Handle edits to additives tables via the controller"""
-        if getattr(self.view, "_suppress_additives_table_signals", False):
-            return
+            table.setItem(row, 1, QTableWidgetItem(display_wt))
+            table.setItem(row, 2, QTableWidgetItem(display_unit))
 
-        keys = sorted(self.calculator.additives.keys())
-        if row < 0 or row >= len(keys):
-            return
+            # Cost
+            cost_per_g = self.cost_manager.get_cost_per_gram(name)
+            cost = cost_per_g * weight_g
+            table.setItem(row, 3, QTableWidgetItem(f"${cost:.2f}"))
 
-        name = keys[row]
+    def on_new_clicked(self):
+        """Resets the state for a brand new recipe."""
+        self.calculator.oils.clear()
+        self.calculator.additives.clear()
+        self.view.recipe_tab.notes_widget.set_notes("")
+        self.view.current_recipe = Recipe()
+        self.view.current_recipe.name = "New Recipe"
 
-        # Process Weight/Amount edit (Column 1)
-        if column == 1:
-            item = self.view.recipe_tab.additives_table.item(row, 1)
-            if item:
-                try:
-                    display_val = float(item.text())
-                    grams = self.calculator.convert_to_grams(
-                        display_val, self.calculator.unit_system
-                    )
-                    self.calculator.additives[name] = grams
-                    #self.view.update_results()
-                    self.update_calculations()
-                except ValueError as e:
-                    log.warning(f"Invalid additive amount in row {row}: {e}")
-    #Scale Recipe
-    def on_scale_clicked(self):
-        target_weight = self.view.recipe_tab.scale_spinbox.value()
-        # Get the current unit (e.g., 'ounces')
-        current_unit = self.calculator.unit_system
+        unit_pref = self.view._settings.value("unit_system", "grams").lower()
+        conv = 28.3495231
 
-        if target_weight > 0:
-            # Convert the user's input (oz/lbs) into grams for the calculator
-            target_in_grams = self.calculator.convert_to_grams(target_weight, current_unit)
-
-            self.calculator.scale_recipe(target_in_grams)
-            self.view.on_recipe_modified()
-    #Save Recipe
-    def perform_save(self):
-        """Saves recipe by syncing all data to the object first."""
-        name, ok = QInputDialog.getText(
-            self.view, "Save Recipe", "Recipe Name:", text=self.view.current_recipe.name
-        )
-
-        if not (ok and name):
-            return
-
-        # 1. Sync EVERYTHING to the recipe object first
-        r = self.view.current_recipe
-        r.name = name
-        r.oils = self.calculator.oils.copy()
-        r.additives = self.calculator.additives.copy()
-        r.lye_type = self.calculator.lye_type
-        r.water_calc_method = self.calculator.water_calc_method
-        r.water_to_lye_ratio = self.calculator.water_to_lye_ratio
-        r.water_percent = self.calculator.water_percent
-        r.lye_concentration = self.calculator.lye_concentration
-        r.superfat_percent = self.calculator.superfat_percent
-
-        # Add the notes to the object before saving
-        # (Assuming your Recipe model has a .notes attribute)
-        r.notes = self.view.recipe_tab.notes_widget.get_notes()
-
-        # 2. Single Save Operation
-        # The manager should handle the JSON conversion internally
-        filepath = self.recipe_manager.save_recipe(r)
-
-        if filepath:
-            # Refresh the UI list
-            self.view.manager_widget.refresh_recipe_list()
-            log.info(f"Recipe saved successfully to {filepath}")
+        if unit_pref == "ounces":
+            self.calculator.total_batch_weight = 32.0 * conv
+        elif unit_pref == "pounds":
+            self.calculator.total_batch_weight = 2.0 * 16 * conv
+        else:
+            self.calculator.total_batch_weight = 1000.0
 
         self.update_calculations()
-    #Load Recipe
-    def on_load_clicked(self, filepath=None):
-        """
-        Handles loading. If filepath is provided (from Library), use it.
-        If not (from Button), open the File Dialog.
-        """
-        #log.info("Load recipe initiated")
-        # If no filepath was passed (meaning the 'Load' button was clicked)
-        if not filepath:
-            filepath, _ = QFileDialog.getOpenFileName(
-                self.view, "Open Recipe", "recipes", "JSON Files (*.json)"
-            )
+        self.view.statusBar().showMessage("New recipe created.")
 
+    def on_scale_clicked(self):
+        """Scales the recipe based on the target weight in the UI."""
+        target_weight = self.view.recipe_tab.scale_spinbox.value()
+        unit_sys = self.calculator.unit_system
+        current_oil_total = self.calculator.get_total_oil_weight()
+
+        if target_weight > 0 and current_oil_total > 0:
+            conv = 28.3495231
+            target_grams = target_weight
+            if unit_sys == "ounces":
+                target_grams = target_weight * conv
+            elif unit_sys == "pounds":
+                target_grams = (target_weight * 16) * conv
+
+            ratio = target_grams / current_oil_total
+
+            # Scale Oils
+            for name in self.calculator.oils:
+                self.calculator.oils[name] *= ratio
+
+            # Scale Additives proportionally
+            for name in self.calculator.additives:
+                self.calculator.additives[name] *= ratio
+
+            self.update_calculations()
+            self.view.statusBar().showMessage(f"Scaled oils to {target_weight} {self.calculator.get_unit_abbreviation()}")
+
+    def log_batch(self):
+        """Deducts inventory and saves to batch history."""
+        if not self.calculator.oils:
+            QMessageBox.warning(self.view, "Error", "Cannot log an empty recipe.")
+            return
+
+        if not self.batch_manager:
+            log.error("Batch Manager not provided to Controller.")
+            return
+
+        insufficient = []
+        for name, weight in {**self.calculator.oils, **self.calculator.additives}.items():
+            if not self.cost_manager.has_sufficient_stock(name, weight):
+                insufficient.append(name)
+
+        lye_w = self.calculator.get_lye_weight()
+        if not self.cost_manager.has_sufficient_stock(self.calculator.lye_type, lye_w):
+            insufficient.append(self.calculator.lye_type)
+
+        if insufficient:
+            QMessageBox.warning(self.view, "Stock Warning", f"Low stock on: {', '.join(insufficient)}")
+            return
+
+        for name, weight in {**self.calculator.oils, **self.calculator.additives}.items():
+            self.cost_manager.deduct_stock(name, weight)
+        self.cost_manager.deduct_stock(self.calculator.lye_type, lye_w)
+
+        recipe_data = self.calculator.get_recipe_dict()
+        recipe_data["name"] = self.view.current_recipe.name or "Unsaved Batch"
+        batch = self.batch_manager.create_batch(recipe_data, self.view.recipe_tab.notes_widget.get_notes())
+
+        self.view.statusBar().showMessage(f"Batch Logged: Lot {batch['lot_number']}")
+        if hasattr(self.view, 'inventory_widget'):
+            self.view.inventory_widget.refresh_table()
+
+    def perform_save(self):
+        """Logic for saving the recipe to a JSON file."""
+        name, ok = QInputDialog.getText(self.view, "Save", "Recipe Name:", text=self.view.current_recipe.name)
+        if ok and name:
+            self.view.current_recipe.name = name
+            self.view.current_recipe.oils = self.calculator.oils.copy()
+            self.view.current_recipe.additives = self.calculator.additives.copy()
+            self.view.current_recipe.notes = self.view.recipe_tab.notes_widget.get_notes()
+
+            path = self.recipe_manager.save_recipe(self.view.current_recipe)
+            if path:
+                self.view.statusBar().showMessage(f"Saved to {os.path.basename(path)}")
+                self.view.manager_widget.refresh_recipe_list()
+
+    def perform_load(self, filepath):
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+
+            loaded = Recipe.from_dict(data)
+            # ... name logic ...
+
+            # 1. Update the underlying data
+            self.calculator.oils = loaded.oils.copy()
+            self.calculator.additives = data.get("additives", {}).copy()
+            self.view.current_recipe = loaded
+
+            # 2. IMPORTANT: Tell the UI the table has changed
+            if hasattr(self.view, 'recipe_model'):
+                self.view.recipe_model.refresh()
+
+            # 3. Now run the math (it will see the new rows)
+            self.update_calculations()
+            self.view.statusBar().showMessage(f"Loaded {loaded.name}")
+        except Exception as e:
+            log.error(f"Failed to load recipe: {e}")
+
+    def on_load_clicked(self, filepath=None):
+        if not filepath:
+            filepath, _ = QFileDialog.getOpenFileName(self.view, "Load Recipe", "recipes", "JSON (*.json)")
         if filepath:
-            # Pass the work to perform_load to keep this clean
             self.perform_load(filepath)
