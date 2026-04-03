@@ -1,29 +1,15 @@
-"""UI REPORT TAB - Generate printable recipe reports and labels"""
-
+import os
 from datetime import datetime
-
-from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QTextBrowser,
-)
-from src.models import SoapCalculator
-
-try:
-    from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-
-    _HAS_PRINTER = True
-except ImportError:
-    _HAS_PRINTER = False
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QUrl
+from src.utils.logger import log
 
 
 class RecipeReportWidget(QWidget):
-    """Widget for viewing and printing the recipe"""
+    """Luxury Report Engine - CSS styles handled externally in report_style.css"""
 
-    def __init__(self, view, calculator: SoapCalculator):
+    def __init__(self, view, calculator):
         super().__init__()
         self.view = view
         self.calculator = calculator
@@ -31,335 +17,239 @@ class RecipeReportWidget(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Toolbar
         btn_layout = QHBoxLayout()
-        refresh_btn = QPushButton("Refresh View")
+        refresh_btn = QPushButton("Refresh Artisan Report")
+        refresh_btn.setStyleSheet("""
+            background-color: #3F4238; color: #C5A059;
+            font-weight: bold; border: 1px solid #C5A059; padding: 8px 20px;
+        """)
         refresh_btn.clicked.connect(lambda: self.refresh_report())
         btn_layout.addWidget(refresh_btn)
-
-        if _HAS_PRINTER:
-            print_btn = QPushButton("Print / Save PDF")
-            print_btn.clicked.connect(self.print_report)
-            btn_layout.addWidget(print_btn)
-
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
-        # Viewer
-        self.viewer = QTextBrowser()
-
+        self.viewer = QWebEngineView()
         layout.addWidget(self.viewer)
-
         self.setLayout(layout)
 
-    def refresh_report(self, recipe_name=None, notes=None):
-        """Generate HTML report"""
-        props = self.calculator.get_batch_properties()
-        unit = self.calculator.unit_system
-        unit_abbr = self.calculator.get_unit_abbreviation()
-        qualities = props.get("relative_qualities", {})
-        fa_profile = props.get("fa_breakdown", {})
+    def refresh_report(self, recipe_name=None, notes=None, instructions=None):
+            """Dynamic Luxury Report - Checks mode to display correct Phases"""
+            # 1. SETUP & DATA
+            recipe = self.view.current_recipe
+            props = self.calculator.get_batch_properties()
+            current_mode = self.view.get_current_mode()
+            is_soap = (current_mode == "Cold Process Soap")
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            sidebar_html = self._get_sidebar(props, is_soap)
+            try:
+                log.debug(f"Inside of Try Loop")
+                # Get the current recipe object
+                recipe = self.view.current_recipe
+                # Pull the LIVE text from your widgets
+                # Update these variable names to match your actual UI variables
+                recipe.name = recipe.name or "Untitled Formulation"
+                log.debug(f"Recipe Name: {recipe.name}")
+                recipe.instructions = self.view.instructions
+                log.debug(f"Recipe Instructions: {recipe.instructions}")
+                recipe.notes = self.view.notes
+                log.debug(f"Recipe Notes: {recipe.notes}")
+                # Sync Scents as well
+                recipe.scent_top = {
+                    "name": recipe.scent_top_name.text(),
+                    "description": recipe.scent_top_desc.text()
+                }
+                log.debug(f"Top Scent: {recipe.scent_top}")
+                log.debug(f"Top Scent Description: {recipe.scent_top_desc.text()}")
+            except:
+                pass
 
-        label_html = self.generate_label_html(props)
 
-        # If no name is passed in, try to get it from the calculator
-        if hasattr(self.view, 'current_recipe'):
-            recipe_name = getattr(self.view.current_recipe, 'name', 'Untitled Recipe')
+            # 2. RENDER PHASE A (Always exists)
+            oil_rows = ""
+            for n, w in self.calculator.oils.items():
+                perc = (w / props['total_oil_weight'] * 100) if props['total_oil_weight'] > 0 else 0
+                oil_rows += f"<tr><td>{n}</td><td style='text-align:right'>{w:.2f}g</td><td style='text-align:right'>{perc:.1f}%</td></tr>"
 
-        # If no notes are passed in, try to get them from the calculator
-        if not notes:
-            notes = getattr(self.calculator, 'notes', '')
-
-        # Define ranges for qualities
-        quality_ranges = [
-            ("Hardness", 29, 54),
-            ("Cleansing", 12, 22),
-            ("Conditioning", 44, 69),
-            ("Bubbly", 14, 46),
-            ("Creamy", 16, 48),
-            ("Iodine", 41, 70),
-            ("INS", 136, 165),
-        ]
-
-        # Helper to format weight
-        def fmt(w):
-            return f"{self.calculator.convert_weight(w, unit):.2f}"
-
-        # Get Company Info
-        settings = QSettings("FireAndIceApothecary", "SoapCalc")
-        company_name = settings.value("company_name", "")
-        website = settings.value("company_website", "")
-
-        # Date
-        date_str = datetime.now().strftime("%Y-%m-%d")
-
-        html = f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; background-color: #fff; font-size: 11px; }}
-
-                /* Letterhead Styles */
-                .header-table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; border-bottom: 2px solid #1565c0; padding-bottom: 10px; }}
-                .company-name {{ font-size: 22px; font-weight: bold; color: #1565c0; margin: 0; }}
-                .company-web {{ font-size: 12px; color: #666; margin-top: 4px; }}
-                .report-title {{ font-size: 18px; font-weight: bold; color: #333; text-align: right; }}
-                .report-date {{ font-size: 11px; color: #888; text-align: right; margin-top: 4px; }}
-
-                .section-header {{
-                    background-color: #e3f2fd;
-                    color: #0d47a1;
-                    padding: 4px 8px;
-                    font-weight: bold;
-                    font-size: 1.0em;
-                    margin-top: 10px;
-                    border-left: 4px solid #1565c0;
-                }}
-
-                table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                th {{ text-align: right; background-color: #f5f5f5; padding: 4px; border: 1px solid #e0e0e0; color: #424242; font-weight: bold; }}
-                th.left-align {{ text-align: left; }}
-                td {{ padding: 4px; border: 1px solid #f0f0f0; text-align: right; }}
-                td.left-align {{ text-align: left; }}
-
-                .param-table td {{ border: none; text-align: left; padding: 2px; }}
-                .param-label {{ font-weight: bold; width: 160px; }}
-
-                .highlight {{ font-weight: bold; color: #0277bd; }}
-                .notes-box {{ background-color: #fffde7; padding: 8px; border: 1px solid #fff9c4; margin-top: 5px; white-space: pre-wrap; }}
-
-                .out-of-range {{ color: #d32f2f; font-weight: bold; }}
-                .in-range {{ color: #2e7d32; }}
-
-                .bar-container {{ background-color: #f0f0f0; height: 12px; width: 100%; border-radius: 2px; }}
-                .bar-fill {{ background-color: #1976d2; height: 100%; border-radius: 2px; }}
-            </style>
-        </head>
-        <body>
-            <!-- Letterhead Header -->
-            <table class="header-table">
-                <tr>
-                    <td style="border:none; vertical-align: bottom;">
-                        <div class="company-name">🌿 {company_name if company_name else "Fire & Ice Apothecary"}</div>
-                        <div class="company-web">{website}</div>
-                    </td>
-                    <td style="border:none; vertical-align: bottom;">
-                        <div class="report-title">{recipe_name}</div>
-                        <div class="report-date">Date: {date_str}</div>
-                    </td>
-                </tr>
-            </table>
-        """
-
-        # Calculate true total weight early for display
-        additive_weight = sum(self.calculator.additives.values())
-        true_total_weight = props["total_batch_weight"] + additive_weight
-
-        # --- Master Batch Logic ---
-        water_row_label = "Water"
-        water_val = props["water_weight"]
-        lye_row_label = "Lye"
-        lye_val = props["lye_weight"]
-        html += f"""
-            <!-- Top Section: Parameters and Totals Side-by-Side -->
-            <table style="border:none; width:100%; margin-top:0;">
-            <tr style="vertical-align:top;">
-            <td style="width:48%; border:none; padding:0; padding-right:10px;">
-                <div class="section-header" style="margin-top:0;">Batch Parameters</div>
-                <table class="param-table">
-                    <tr><td class="param-label">Total Oil Weight:</td><td>{self.calculator.convert_weight(props['total_oil_weight'], 'pounds'):.2f} lbs / {props['total_oil_weight']:.0f} g</td></tr>
-                    <tr><td class="param-label">Water % of Oils:</td><td>{(props['water_weight'] / props['total_oil_weight'] * 100) if props['total_oil_weight'] else 0:.1f} %</td></tr>
-                    <tr><td class="param-label">Super Fat:</td><td>{self.calculator.superfat_percent} %</td></tr>
-                    <tr><td class="param-label">Lye Concentration:</td><td>{(props['lye_weight'] / (props['lye_weight'] + props['water_weight']) * 100) if (props['lye_weight'] + props['water_weight']) else 0:.1f} %</td></tr>
-                    <tr><td class="param-label">Water : Lye Ratio:</td><td>{(props['water_weight'] / props['lye_weight']) if props['lye_weight'] else 0:.2f}:1</td></tr>
-                    <tr><td class="param-label">Lye Type:</td><td>{self.calculator.lye_type}</td></tr>
+            phase_a_html = f"""
+            <div class="glass-card">
+                <div class="phase-header sage">
+                    <h2 style="font-family:'Playfair Display'; margin:0; font-style:italic">Phase A: Heat Phase</h2>
+                    <span class="phase-badge">Oil Soluble</span>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Ingredient</th><th style='text-align:right'>Weight</th><th style='text-align:right'>%</th></tr></thead>
+                    <tbody>{oil_rows}</tbody>
                 </table>
-            </td>
-            <td style="width:48%; border:none; padding:0;">
-                <div class="section-header" style="margin-top:0;">Liquids & Totals</div>
-                <table>
-                    <tr><th class="left-align">Item</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
-                    <tr><td class="left-align">{water_row_label}</td><td>{water_val/453.592:.2f}</td><td>{water_val/28.3495:.2f}</td><td>{water_val:.1f}</td></tr>
-                    <tr><td class="left-align">{lye_row_label}</td><td>{lye_val/453.592:.2f}</td><td>{lye_val/28.3495:.2f}</td><td>{lye_val:.1f}</td></tr>
-                    <tr style="font-weight:bold;"><td class="left-align">Total Batch</td><td>{true_total_weight/453.592:.2f}</td><td>{true_total_weight/28.3495:.2f}</td><td>{true_total_weight:.1f}</td></tr>
-                </table>
-            </td>
-            </tr>
-            </table>
+            </div>"""
 
-            <div class="section-header">Oils & Ingredients</div>
-            <table>
-                <tr><th class="left-align">Oil Name</th><th>%</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
-        """
+            # 3. RENDER PHASE B (Conditional: Lye for Soap, Cool Down for Body Products)
+            phase_b_html = ""
 
-        total_oil = props["total_oil_weight"]
-        for name, weight in self.calculator.oils.items():
-            pct = (weight / total_oil * 100) if total_oil > 0 else 0
-            html += f"<tr><td class='left-align'>{name}</td><td>{pct:.1f}</td><td>{weight/453.592:.3f}</td><td>{weight/28.3495:.2f}</td><td>{weight:.2f}</td></tr>"
+            if is_soap:
+                phase_b_html = f"""
+                <div class="glass-card" style="margin-top: 2rem;">
+                    <div class="phase-header charcoal">
+                        <h2 style="font-family:'Playfair Display'; margin:0; font-style:italic">Phase B: Lye Solution</h2>
+                        <span class="phase-badge">Reactive</span>
+                    </div>
+                    <table class="data-table">
+                        <tr><td>Distilled Water</td><td style='text-align:right'>{props['water_weight']:.2f}g</td></tr>
+                        <tr><td>{self.calculator.lye_type} Lye</td><td style='text-align:right'>{props['lye_weight']:.2f}g</td></tr>
+                    </table>
+                </div>"""
+            else:
+                # If it's a Body Product, we can display the Cool Down phase additives here
+                # (Assuming you have a way to pull fragrance/extract weights)
+                phase_b_html = f"""
+                <div class="glass-card" style="margin-top: 2rem;">
+                    <div class="phase-header charcoal">
+                        <h2 style="font-family:'Playfair Display'; margin:0; font-style:italic">Phase B: Cool Down</h2>
+                        <span class="phase-badge">Sensitive</span>
+                    </div>
+                    <div class="process-content" style="padding: 1.5rem;">
+                        Additives, Fragrances, and Essential Oils are incorporated once temperature drops below 40°C.
+                    </div>
+                </div>"""
 
-        html += f"""
-                <tr style="font-weight:bold; background-color:#fafafa;"><td class="left-align">Totals</td><td>100.0</td><td>{total_oil/453.592:.3f}</td><td>{total_oil/28.3495:.2f}</td><td>{total_oil:.2f}</td></tr>
-            </table>
-        """
+            # 4. ASSEMBLE FINAL HTML (Updated to include sidebar_html)
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <link rel="stylesheet" type="text/css" href="report_style.css">
+            </head>
+            <body>
+                <header class="luxury-header">
+                    <span class="brand-tag">Fire & Ice Apothecary • Artisan Formulator</span>
+                    <h1 class="recipe-title">{recipe.name or "Untitled"}</h1>
+                </header>
 
-        if self.calculator.additives:
-            html += """
-            <div class="section-header">Additives</div>
-            <table>
-                <tr><th class="left-align">Additive</th><th>Pounds</th><th>Ounces</th><th>Grams</th></tr>
+                <main class="report-container">
+                    <div class="left-column">
+                        {phase_a_html}
+                        {phase_b_html}
+                    </div>
+
+                    <div class="right-column">
+                        {sidebar_html}
+
+                        <div class="glass-card" style="padding: 2rem; border-left: 4px solid var(--gold); margin-top: 2rem;">
+                            <h3 class='scent-header'>Scent Profile</h3>
+                            {self._get_static_scent_html("Top Note", recipe.scent_top, "Bright", 33)}
+                            {self._get_static_scent_html("Mid Note", recipe.scent_mid, "Heart", 66)}
+                            {self._get_static_scent_html("Base Note", recipe.scent_base, "Deep", 100)}
+                        </div>
+
+                        <div class="glass-card" style="padding: 2rem; margin-top: 2rem; border-left: 4px solid var(--gold);">
+                            <h3 style="font-family:'Playfair Display'; margin-top:0">The Process</h3>
+                            <div class="process-timeline">
+                                <div class="step-item">
+                                    <p class="step-text">{recipe.instructions}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </body>
+            </html>
             """
-            for name, weight in self.calculator.additives.items():
-                html += f"<tr><td class='left-align'>{name}</td><td>{weight/453.592:.3f}</td><td>{weight/28.3495:.2f}</td><td>{weight:.2f}</td></tr>"
-            html += "</table>"
+            self.viewer.setHtml(html, baseUrl=QUrl.fromLocalFile(base_path + "/"))
 
-        # Two-column layout for Qualities and FA
-        html += """
-        <table style="border: none; margin-top: 20px;">
-            <tr style="vertical-align: top;">
-                <td style="width: 48%; border: none; padding: 0; padding-right: 10px;">
-                    <div class="section-header" style="margin-top: 0;">Soap Qualities</div>
-                    <table>
-                        <tr><th class="left-align">Quality</th><th>Range</th><th>Value</th></tr>
-        """
+    def _get_static_scent_html(self, label, data, mood, progress):
+        if not data.get("name"): return ""
+        return f"""
+        <div class="scent-row">
+            <div class="scent-meta">
+                <span class="scent-label">{label}</span>
+                <span class="scent-mood">{mood}</span>
+            </div>
+            <div class="progress-bg"><div class="progress-fill" style="width:{progress}%"></div></div>
+            <p style="margin: 0.5rem 0 0.25rem 0; font-weight:600;">{data['name']}</p>
+            <p style="margin:0; font-size:0.75rem; color:var(--sage); font-style:italic;">{data['description']}</p>
+        </div>"""
 
-        for name, min_val, max_val in quality_ranges:
-            val = int(round(qualities.get(name.lower(), 0)))
-            style_class = (
-                "out-of-range" if (val < min_val or val > max_val) else "in-range"
-            )
-            html += f"<tr><td class='left-align'>{name}</td><td>{min_val} - {max_val}</td><td class='{style_class}'>{val}</td></tr>"
-
-        html += """
-                    </table>
-                </td>
-                <td style="width: 4%; border: none;"></td>
-                <td style="width: 48%; border: none; padding: 0;">
-                    <div class="section-header" style="margin-top: 0;">Fatty Acid Profile</div>
-                    <table>
-                        <tr><th class="left-align">Acid</th><th>%</th></tr>
-        """
-
-        fa_order = [
-            "lauric",
-            "myristic",
-            "palmitic",
-            "stearic",
-            "ricinoleic",
-            "oleic",
-            "linoleic",
-            "linolenic",
-        ]
-        for fa in fa_order:
-            val = float(fa_profile.get(fa, 0.0))
-            if val > 0.1:  # Only show present FAs
-                html += f"""
-                <tr>
-                    <td class='left-align'>{fa.capitalize()}</td>
-                    <td>{val:.1f}%</td>
-                </tr>
-                """
-
-        html += """
-                    </table>
-                </td>
-            </tr>
-        </table>
-        """
-
-        html += label_html
-
-        if notes:
-            html += f"<div class='section-header'>Instructions & Notes</div><div class='notes-box'>{notes}</div>"
-
-        html += "</body></html>"
-        self.viewer.setHtml(html)
-
-    def generate_label_html(self, props):
-        """Generate INCI label preview"""
-        # Determine salt prefix based on lye
-        lye_type = self.calculator.lye_type
-        prefix = "Potassium" if "KOH" in lye_type else "Sodium"
-
-        # Common INCI root mapping
-        # This maps the oil name to the root used with Sodium/Potassium
-        inci_roots = {
-            "Olive Oil": "Olivate",
-            "Coconut Oil": "Cocoate",
-            "Palm Oil": "Palmate",
-            "Castor Oil": "Castorate",
-            "Sweet Almond Oil": "Sweet Almondate",
-            "Avocado Oil": "Avocadoate",
-            "Shea Butter": "Shea Butterate",
-            "Cocoa Butter": "Cocoa Butterate",
-            "Lard": "Lardate",
-            "Tallow": "Tallowate",
-            "Babassu Oil": "Babassuate",
-            "Sunflower Oil": "Sunflowerate",
-            "Safflower Oil": "Safflowerate",
-            "Rice Bran Oil": "Rice Branate",
-            "Mango Seed Butter": "Mango Butterate",
-            "Hemp Oil": "Hempseedate",
-            "Neem Seed Oil": "Neemate",
-            "Stearic Acid": "Stearate",
-        }
-
-        # Collect all ingredients with weights
-        ingredients = []
-
-        # Oils (converted to salts)
-        for name, weight in self.calculator.oils.items():
-            # Check if we have a mapping
-            root = inci_roots.get(name)
-            if root:
-                inci_name = f"{prefix} {root}"
-            else:
-                # Fallback for unmapped oils
-                inci_name = f"Saponified {name}"
-            ingredients.append((weight, inci_name))
-
-        # Additives
-        for name, weight in self.calculator.additives.items():
-            # Simple mapping for common additives
-            if "Fragrance" in name or "EO" in name:
-                ingredients.append((weight, "Parfum (Fragrance)"))
-            else:
-                ingredients.append((weight, name))
-
-        # Water (Aqua) and Glycerin
-        # Note: In a finished bar, much water evaporates, but Glycerin is produced.
-        # This is an estimation. Glycerin is roughly ~10% of oil weight in cold process.
-        # Water remaining is variable, but we'll list Aqua based on input water for the raw list order,
-        # or place it appropriately. Standard INCI lists Aqua often 1st or 2nd.
-        # For simplicity in this generator, we will add Aqua and Glycerin based on batch proportions.
-
-        ingredients.append((props["water_weight"], "Aqua"))
-        ingredients.append(
-            (props["total_oil_weight"] * 0.1, "Glycerin")
-        )  # Rough estimate
-
-        # Sort by weight descending
-        ingredients.sort(key=lambda x: x[0], reverse=True)
-
-        # Format list
-        label_text = ", ".join([item[1] for item in ingredients])
+    def _get_olfactory_profile_chart(self, top, mid, base):
+        """Generates the Scent chart using structured data"""
+        # Only show if at least one scent name is filled in
+        if not any([top['name'], mid['name'], base['name']]):
+            return ""
 
         return f"""
-        <div class="section-header">Ingredient Label (INCI Preview)</div>
-        <div style="padding: 8px; border: 1px dashed #999; background-color: #f9f9f9; margin-top: 5px; font-size: 10px;">
-            <b>Ingredients:</b> {label_text}
+        <div class="perf-card" style="border-left: 4px solid #C5A059; margin-top: 20px;">
+            <h4 style="font-family: 'Playfair Display', serif; color: #C5A059; font-size: 20px; margin-top:0; margin-bottom:20px;">Scent Profile</h4>
+
+            {self._get_scent_row("Top Note", top['name'], top['description'], 33)}
+            {self._get_scent_row("Middle Note", mid['name'], mid['description'], 66)}
+            {self._get_scent_row("Base Note", base['name'], base['description'], 100)}
         </div>
-        <div style="font-size: 11px; color: #666; margin-top: 5px;">* Generated estimation. Verify with local regulations.</div>
         """
 
-    def print_report(self):
-        if not _HAS_PRINTER:
-            return
+    def _get_scent_row(self, label, name, desc, progress):
+        if not name: return ""
 
-        # Use ScreenResolution to fix tiny text issue in PDFs
-        printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
+        # Determine mood adjective based on label
+        adj = "Zesty & Fresh" if "Top" in label else "Floral & Fruity" if "Middle" in label else "Warm & Sensual"
 
-        preview = QPrintPreviewDialog(printer, self)
-        preview.setMinimumSize(1000, 800)
-        preview.paintRequested.connect(lambda p: self.viewer.print(p))
-        preview.exec()
+        return f"""
+        <div style="margin-bottom: 20px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span style="font-size:9px; text-transform:uppercase; font-weight:bold; color:#C5A059; letter-spacing:1px;">{label}</span>
+                <span style="font-size:10px; color:#6B705C; font-style:italic;">{adj}</span>
+            </div>
+            <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:{progress}%;"></div></div>
+            <p style="margin: 8px 0 2px 0; font-weight:600; color:#3F4238; font-size:14px;">{name}</p>
+            <p style="margin: 0; font-size:12px; color:#6B705C; font-style:italic; line-height:1.4;">{desc}</p>
+        </div>
+        """
+
+    def _generate_soap_layout(self, props):
+        oil_rows = "".join([f"<tr><td><b>{n}</b></td><td align='right'>{w:.1f}g</td></tr>" for n, w in self.calculator.oils.items()])
+        return f"""
+            <div class="phase-card">
+                <div class="phase-header">Phase A: Saponifiables <span class="phase-badge">Oil Soluble</span></div>
+                <table class="data-table">{oil_rows}</table>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header" style="background:#3F4238;">Phase B: Lye Solution <span class="phase-badge">Reactive</span></div>
+                <table class="data-table">
+                    <tr><td>Distilled Water</td><td align="right">{props['water_weight']:.1f}g</td></tr>
+                    <tr><td>{self.calculator.lye_type} Lye</td><td align="right">{props['lye_weight']:.1f}g</td></tr>
+                </table>
+            </div>
+        """
+
+    def _generate_body_layout(self, props):
+        oil_rows = "".join([f"<tr><td><b>{n}</b></td><td align='right'>{w:.1f}g</td></tr>" for n, w in self.calculator.oils.items()])
+        return f"""
+            <div class="phase-card">
+                <div class="phase-header">Phase A: Heat Phase <span class="phase-badge">Oil Soluble</span></div>
+                <table class="data-table">{oil_rows}</table>
+            </div>
+        """
+
+    def _get_sidebar(self, props, is_soap):
+        if not is_soap:
+            return '<div class="perf-card" style="border-left: 4px solid var(--gold);"><h4 style="margin-top:0; font-family: \'Playfair Display\', serif;">Formulation Info</h4><p style="font-size:12px;">Body Product</p></div>'
+
+        qualities = props.get("relative_qualities", {})
+        perf_bars = ""
+        for q, v in qualities.items():
+            perf_bars += f"""
+                <div class="stat-row">
+                    <div class="stat-labels"><span>{q}</span><span>{round(v)}</span></div>
+                    <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:{v}%"></div></div>
+                </div>"""
+        return f'<div class="perf-card" style="border-left: 4px solid var(--gold);"><h4 style="margin-top:0; font-family: \'Playfair Display\', serif;">Soap Performance</h4>{perf_bars}</div>'
+
+    def generate_label_html(self, props):
+        prefix = "Potassium" if "KOH" in self.calculator.lye_type else "Sodium"
+        ingredients = sorted([(w, f"{prefix} Saponified {n}") for n, w in self.calculator.oils.items()], reverse=True)
+        label_text = ", ".join([item[1] for item in ingredients])
+        return f"""
+            <h4 style="margin-top:0; font-size:12px; text-transform:uppercase; color:#6B705C; letter-spacing:1px;">INCI Label Preview</h4>
+            <p style="font-size:11px; line-height:1.6; color:#3F4238;"><b>INGREDIENTS:</b> {label_text}, Aqua, Glycerin.</p>
+        """
