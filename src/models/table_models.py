@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QAbstractTableModel, Qt
+from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
 from src.utils.logger import log
 
 class RecipeTableModel(QAbstractTableModel):
@@ -9,7 +9,7 @@ class RecipeTableModel(QAbstractTableModel):
         self.controller = controller
         self.cost_manager = cost_manager  # <-- Now it gets set!
         self.unit_system = "grams"
-        self.headers = ["Oil Name", "Weight", "Unit", "%", "Cost"]
+        self.headers = ["Lock", "Oil Name", "Weight", "Unit", "%", "Cost"]
 
     def rowCount(self, parent=None):
         return len(self.calculator.oils)
@@ -21,6 +21,22 @@ class RecipeTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
             return self.headers[section] if section < len(self.headers) else None
         return None
+
+    def flags(self, index):
+        if not index.isValid():
+            return Qt.ItemFlag.NoItemFlags
+
+        col = index.column()
+
+        # COLUMN 0: THE LOCK CHECKBOX
+        if col == 0:
+            return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsUserCheckable
+
+        # COLUMN 2 (Weight) and COLUMN 4 (%) are editable text
+        if col in [2, 4]:
+            return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
@@ -34,81 +50,77 @@ class RecipeTableModel(QAbstractTableModel):
         weight_grams = self.calculator.oils.get(oil_name, 0.0)
         col = index.column()
 
-        if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0:
-                return oil_name
+        if col == 0:
+            if role == Qt.ItemDataRole.CheckStateRole:
+                return Qt.CheckState.Checked if oil_name in self.calculator.locked_oils else Qt.CheckState.Unchecked
+            return None
 
-            if col == 1: # Weight
-                unit = getattr(self, 'unit_system', 'grams')
-                if unit == 'ounces':
-                    return f"{weight_grams / 28.3495231:.2f}"
-                if unit == 'pounds':
-                    return f"{weight_grams / 453.592:.3f}"
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 1: return oil_name
+
+            if col == 2: # Weight Display
+                if self.unit_system == "ounces":
+                    return f"{(weight_grams * 0.035274):.2f}"
+                if self.unit_system == "pounds":
+                    return f"{(weight_grams * 0.00220462):.2f}"
                 return f"{weight_grams:.2f}"
 
-            if col == 2: # Unit Label
-                unit = getattr(self, 'unit_system', 'grams')
-                if unit == 'ounces': return "oz"
-                if unit == 'pounds': return "lb"
+            if col == 3: # Unit String
+                if self.unit_system == "ounces": return "oz"
+                if self.unit_system == "pounds": return "lb"
                 return "g"
 
-            if col == 3: # Percentage
-                total = self.calculator.get_total_oil_weight()
-                return f"{(weight_grams / total * 100):.1f}%" if total > 0 else "0%"
+            if col == 4: # Percentage
+                total = sum(self.calculator.oils.values())
+                return f"{(weight_grams / total * 100):.2f}%" if total > 0 else "0.00%"
 
-            if col == 4: # Cost
+            if col == 5: # Cost
                 if self.cost_manager:
-                    cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
-                    total_cost = cost_per_g * weight_grams
-                    return f"${total_cost:.2f}"
+                    cost = self.cost_manager.get_cost_per_gram(oil_name) * weight_grams
+                    return f"${cost:.2f}"
                 return "$0.00"
 
         return None
 
-    def flags(self, index):
-        # Column 1 (Weight) and Column 3 (%) should be editable
-        if index.column() in [1, 3]:
-            return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        if role != Qt.ItemDataRole.EditRole:
+        if not index.isValid():
             return False
+
+        oil_names = list(self.calculator.oils.keys())
+        oil_name = oil_names[index.row()] # Define oil_name here
+        col = index.column()
 
         try:
-            val = float(value)
-            oil_names = list(self.calculator.oils.keys())
-            if index.row() >= len(oil_names):
-                return False
+            if role == Qt.ItemDataRole.EditRole:
+                # Clean the input
+                val_str = str(value).replace('%', '').strip()
+                if not val_str: return False
+                val = float(val_str)
 
-            name = oil_names[index.row()]
+                if col == 4:  # PERCENT COLUMN
+                    self.calculator.rebalance_oils(oil_name, val)
 
-            if index.column() == 1: # Editing Weight
-                # Convert UI value back to grams for the calculator
-                if self.unit_system == "ounces":
-                    grams = val * 28.3495231
-                elif self.unit_system == "pounds":
-                    grams = val * 453.592
-                else:
-                    grams = val
+                elif col == 2:  # WEIGHT COLUMN
+                    if self.unit_system == "ounces":
+                        val = val / 0.035274
+                    self.calculator.oils[oil_name] = val
 
-                self.calculator.add_oil(name, grams) # Updates internal dict
+                if self.controller:
+                    self.controller.update_calculations()
 
-            elif index.column() == 3: # Editing Percentage
-                self.calculator.rebalance_oils(name, val)
+                self.layoutChanged.emit()
+                return True
 
-            # Signal that data changed so the table redraws
-            self.layoutChanged.emit()
+            if role == Qt.ItemDataRole.CheckStateRole and col == 0:
+                is_locked = (value == Qt.CheckState.Checked.value)
+                self.calculator.toggle_lock(oil_name, is_locked)
+                self.dataChanged.emit(index, index)
+                return True
 
-            # TRIGGER THE REFRESH: This ensures the Controller updates labels
-            if self.controller:
-                self.controller.update_calculations()
-
-            return True
-
-        except (ValueError, AttributeError, ZeroDivisionError) as e:
-            log.error(f"Error updating table data: {e}")
+        except Exception as e:
+            log.error(f"Error in setData: {e}")
             return False
+        return False
 
     def refresh(self):
         """Force the view to refresh all rows after a large data change (like loading)."""
@@ -125,3 +137,22 @@ class RecipeTableModel(QAbstractTableModel):
                 'weight': self.calculator.oils[name]
             }
         return {'name': None, 'weight': 0}
+
+    def removeRow(self, row, parent=None):
+            """Removes an oil from the calculator and updates the table view."""
+            if parent is None:
+                parent = QModelIndex()
+
+            self.beginRemoveRows(parent, row, row)
+
+            # Get the list of oil names currently in the calculator
+            oil_names = list(self.calculator.oils.keys())
+
+            if 0 <= row < len(oil_names):
+                oil_to_remove = oil_names[row]
+                # Delete it from the actual data source
+                if oil_to_remove in self.calculator.oils:
+                    del self.calculator.oils[oil_to_remove]
+
+            self.endRemoveRows()
+            return True

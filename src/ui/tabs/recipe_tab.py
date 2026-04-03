@@ -18,6 +18,10 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QTextEdit,
+    QTableView,
+    QLineEdit,
+    QFrame,
+    QTableWidgetItem,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtWidgets import QHeaderView
@@ -39,6 +43,8 @@ class RecipeTab(QWidget):
         self.additives_section = AdditivesSection(self.calculator, self.cost_manager)
         #Bridge
         self.parameters = RecipeParametersWidget(self.calculator, parent=self)
+        self.results_widget = CalculationResultsWidget(self.calculator, self.cost_manager, parent=self)
+
         # 3. Setup UI
         self.setup_ui()
 
@@ -49,11 +55,9 @@ class RecipeTab(QWidget):
 
             # Header section
             header_layout = QHBoxLayout()
-            #header_layout.addStretch()
             self.main_layout.addLayout(header_layout)
 
             self.splitter = QSplitter(Qt.Orientation.Horizontal)
-
 
             # COLUMN 1: Settings & Notes
             col1_scroll = QScrollArea()
@@ -67,9 +71,9 @@ class RecipeTab(QWidget):
 
             col1_vbox.addSpacing(20)
             col1_vbox.addWidget(QLabel("<b>Process Notes</b>"))
-            col1_vbox.addWidget(self.notes_widget)
+            col1_vbox.addWidget(self.notes_widget, 1)
 
-            col1_vbox.addStretch()
+            #col1_vbox.addStretch()
             col1_scroll.setWidget(col1_container)
 
             # COLUMN 2: Ingredients (Oils, Additives, Fragrance)
@@ -93,49 +97,25 @@ class RecipeTab(QWidget):
             soap_layout.addWidget(QLabel("<b>Add Ingredients:</b>"))
             soap_layout.addWidget(self.oil_input_widget)
 
-            #OILS TABLE UPGRADE
-            from PyQt6.QtWidgets import QTableView
-
-            # 1. Use QTableView instead of QTableWidget
+            # OILS TABLE
             self.oils_table = QTableView()
-
-            # 2. Create the model (using the template from the previous message)
             self.recipe_model = RecipeTableModel(self.calculator, self.controller, self.cost_manager)
-
-            # 3. Connect them
             self.oils_table.setModel(self.recipe_model)
-
-            # 3. UI Polish: Make it look good
             self.oils_table.setMinimumHeight(350)
             header = self.oils_table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch) # Stretch all columns
-            # Alternatively, stretch just the first column:
-            # header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-            # 4. CRITICAL FIX: Add it to the layout so it actually appears!
             soap_layout.addWidget(self.oils_table)
 
-            #self.oils_table = QTableWidget()
-            #self.oils_table.setColumnCount(4)
-            #self.oils_table.setMinimumHeight(350)
+            # --- THE SIDE-BY-SIDE SECTION (Now Grouped) ---
+            # Create a container for everything you want to hide in Body Product mode
+            self.additives_section_container = QWidget()
+            self.additives_section_layout = QVBoxLayout(self.additives_section_container)
+            self.additives_section_layout.setContentsMargins(0, 0, 0, 0)
 
+            self.additives_section_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
 
-            #oil_header = self.oils_table.horizontalHeader()
-            # 2. Make Column 0 (Oil Name) stretch to fill the width
-            #oil_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-
-            # 3. Make Columns 1, 2, and 3 (Weight, %, Cost) shrink-wrap their text
-            # (We use range(1, 4) because the Oils table has 4 columns total)
-            #for i in range(1, 4):
-                #oil_header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-
-            #soap_layout.addWidget(self.oils_table)
-
-            # --- THE SIDE-BY-SIDE SECTION ---
-            soap_layout.addWidget(QLabel("<b>Additives & Fragrance:</b>"))
-
-            # Create horizontal container
+            # Horizontal row for the two input widgets
             input_row_layout = QHBoxLayout()
             input_row_layout.setSpacing(10)
 
@@ -146,32 +126,24 @@ class RecipeTab(QWidget):
                 self.calculator, cost_manager=self.cost_manager, parent=self
             )
 
-            # Add widgets to the horizontal row with equal stretch
             input_row_layout.addWidget(self.fragrance_widget, 1)
             input_row_layout.addWidget(self.additive_widget, 1)
+            self.additives_section_layout.addLayout(input_row_layout)
 
-            # Add the horizontal row to the soap layout
-            soap_layout.addLayout(input_row_layout)
-
-            # Additives Table (Below the inputs)
+            # Additives Table (Still inside the group)
             self.additives_table = QTableWidget()
-            self.additives_table.setColumnCount(6) # Updated to 6 for the Action/Remove column
+            self.additives_table.setColumnCount(6)
             self.additives_table.setMinimumHeight(200)
 
-            # 1. Grab the "Control Handle" for the horizontal header
-            header = self.additives_table.horizontalHeader()
+            # ... (Your existing header logic for the additives_table) ...
 
-            # 2. Tell Column 0 (the Name) to take up all the leftover space
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            self.additives_section_layout.addWidget(self.additives_table)
 
-            # 3. Tell Columns 1 through 5 (Weight, %, Cost, etc.) to shrink-wrap the text
-            for i in range(1, 6):
-                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-
-            soap_layout.addWidget(self.additives_table)
+            # ADD THE GROUP TO THE MAIN SOAP LAYOUT
+            soap_layout.addWidget(self.additives_section_container)
 
             self.middle_stack.addWidget(soap_page)
-            self.middle_stack.addWidget(QWidget()) # Placeholder
+            self.middle_stack.addWidget(QWidget()) # Placeholder for body product page
 
             col2_vbox.addWidget(self.middle_stack)
             col2_container.setLayout(col2_vbox)
@@ -183,37 +155,56 @@ class RecipeTab(QWidget):
             col3_container = QWidget()
             col3_vbox = QVBoxLayout(col3_container)
 
+            # 1. TOP SECTION (Wrapped in your master container for easy hiding if needed)
+            self.col3_content_container = QWidget()
+            self.col3_content_layout = QVBoxLayout(self.col3_content_container)
+            self.col3_content_layout.setContentsMargins(0, 0, 0, 0)
+
+
+           # RECIPE NAME
+            self.recipe_name_label = QLabel("No Recipe Loaded")
+            self.recipe_name_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #C5A059; font-style: italic; margin-bottom: 10px;")
+            self.col3_content_layout.addWidget(self.recipe_name_label)
+
+            # Calculation Results
             self.results_widget = CalculationResultsWidget(
                 self.calculator, cost_manager=self.cost_manager, mode="soap", parent=self
             )
-            col3_vbox.addWidget(QLabel("<b>Calculation Results</b>"))
-            col3_vbox.addWidget(self.results_widget)
+            self.col3_content_layout.addWidget(QLabel("<b>Calculation Results</b>"))
+            self.col3_content_layout.addWidget(self.results_widget)
 
-            col3_vbox.addWidget(QLabel("<b>Scale Recipe:</b>"))
+            # Scale Recipe
+            self.col3_content_layout.addWidget(QLabel("<b>Scale Recipe:</b>"))
             self.scale_label = QLabel("Total Oil Weight (g):")
-            col3_vbox.addWidget(self.scale_label)
+            self.col3_content_layout.addWidget(self.scale_label)
             self.scale_spinbox = QDoubleSpinBox()
             self.scale_spinbox.setRange(0, 10000)
-            col3_vbox.addWidget(self.scale_spinbox)
-
+            self.col3_content_layout.addWidget(self.scale_spinbox)
             self.scale_btn = QPushButton("Scale Recipe")
-            col3_vbox.addWidget(self.scale_btn)
+            self.col3_content_layout.addWidget(self.scale_btn)
 
+            # Add the Top Container to the column
+            col3_vbox.addWidget(self.col3_content_container)
+
+            # --- THE SPACER (This pushes the operations to the floor) ---
+            col3_vbox.addStretch(1)
+
+            # 2. BOTTOM SECTION (Added directly to col3_vbox so it stays at the bottom)
             col3_vbox.addWidget(QLabel("<b>Recipe Operations:</b>"))
             btn_layout = QHBoxLayout()
             self.new_btn = QPushButton("New")
             self.save_btn = QPushButton("Save")
             self.load_btn = QPushButton("Load")
+            self.import_btn = QPushButton("Import")
             btn_layout.addWidget(self.new_btn)
             btn_layout.addWidget(self.save_btn)
             btn_layout.addWidget(self.load_btn)
+            btn_layout.addWidget(self.import_btn)
             col3_vbox.addLayout(btn_layout)
 
             self.log_btn = QPushButton("Log Batch")
-            self.log_btn.setStyleSheet("background-color: #e63eab; color: black;")
             col3_vbox.addWidget(self.log_btn)
 
-            col3_vbox.addStretch()
             col3_scroll.setWidget(col3_container)
 
             # Final assembly
@@ -330,6 +321,16 @@ class OilInputWidget(QWidget):
         add_btn.clicked.connect(self.add_oil)
         layout.addWidget(add_btn)
 
+
+    def add_oil_from_import(self, oil_name, weight_grams):
+            """Bridge function to add oil directly from HTML data"""
+            if weight_grams > 0:
+                # This calls the calculator's add method just like your manual button
+                add_method = getattr(self.calculator, self.add_method_name)
+                add_method(oil_name, weight_grams)
+                print(f"[DEBUG] Imported {oil_name}: {weight_grams}g")
+
+
     def add_oil(self):
         """Add selected oil to recipe"""
         oil_name = self.oil_combo.currentText()
@@ -337,30 +338,17 @@ class OilInputWidget(QWidget):
         unit = self.weight_unit_combo.currentText()
 
         if weight > 0:
-            weight_grams = 0.0
             if unit == "%":
-                if self.target_weight_callback:
-                    # Get the 32.0 oz (or whatever the target is)
-                    target_val = self.target_weight_callback()
-
-                    # Convert to grams for the calculator
-                    total_grams = self.calculator.convert_to_grams(target_val, "ounces")
-                    weight_grams = total_grams * (weight / 100.0)
+                self.calculator.rebalance_oils(oil_name, weight)
             else:
                 unit_map = {"g": "grams", "oz": "ounces", "lbs": "pounds"}
-                weight_grams = self.calculator.convert_to_grams(weight, unit_map[unit])
+                weight_grams = self.calculator.convert_to_grams(weight, unit_map.get(unit, "grams"))
+                if weight_grams > 0:
+                    add_method = getattr(self.calculator, self.add_method_name)
+                    add_method(oil_name, weight_grams)
 
-        if weight_grams > 0:
-            print(f"[DEBUG] Adding {oil_name}: {weight_grams}g")
-            add_method = getattr(self.calculator, self.add_method_name)
-            add_method(oil_name, weight_grams)
-
-            # --- NEW ROBUST SEARCH FOR THE MODEL ---
-            # We look at the widget that contains this input widget (the Tab)
-            # If self.parent() isn't it, we try the parent's parent.
+            # --- MODEL REFRESH LOGIC ---
             target = self.parent()
-
-            # Walk up the tree until we find the recipe_model or hit the top
             while target is not None and not hasattr(target, 'recipe_model'):
                 target = target.parent()
 
@@ -368,12 +356,10 @@ class OilInputWidget(QWidget):
                 target.recipe_model.beginResetModel()
                 target.recipe_model.endResetModel()
 
-                # Also refresh the controller while we are at it
                 if hasattr(target, 'controller'):
                     target.controller.update_calculations()
             else:
                 print("[DEBUG] CRITICAL: Could not find recipe_model anywhere in the parent hierarchy!")
-
 
 
     def set_unit_system(self, unit_system: str):
@@ -541,6 +527,7 @@ class AdditiveInputWidget(QWidget):
             names = sorted(list(set(names + inventory_items)))
         self.add_combo.addItems(names)
         self.add_combo.setCurrentText(current)
+
 class FragranceWidget(QWidget):
     """Widget to calculate fragrance amount based on usage rate"""
     fragrance_added = pyqtSignal()
@@ -647,7 +634,6 @@ class FragranceWidget(QWidget):
 
     def refresh_ingredients(self):
         pass
-
 class CalculationResultsWidget(QWidget):
     """Widget to display the calculated results of the recipe."""
 
@@ -669,7 +655,7 @@ class CalculationResultsWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # --- Batch Weights Group ---
-        weights_group = QGroupBox("Batch Weights")
+        self.weights_group = QGroupBox("Batch Weights")
         weights_layout = QFormLayout()
 
         weight_rows = [
@@ -688,8 +674,8 @@ class CalculationResultsWidget(QWidget):
             # Store both label and value for visibility toggling
             self.row_widgets[name] = (row_label, label)
 
-        weights_group.setLayout(weights_layout)
-        layout.addWidget(weights_group)
+        self.weights_group.setLayout(weights_layout)
+        layout.addWidget(self.weights_group)
 
         # --- Masterbatch Rows (Hidden by default) ---
         self.mb_pour_label = QLabel("MB Liquid Pour:")
@@ -700,7 +686,7 @@ class CalculationResultsWidget(QWidget):
         weights_layout.addRow(self.extra_water_label, self.extra_water_value)
 
         # --- Yield Estimation Group ---
-        yield_group = QGroupBox("Yield Estimation")
+        self.yield_group = QGroupBox("Yield Estimation")
         yield_layout = QFormLayout()
 
         self.bar_size_spin = QDoubleSpinBox()
@@ -721,8 +707,8 @@ class CalculationResultsWidget(QWidget):
         yield_layout.addRow("Est. Yield:", self.yield_label)
         yield_layout.addRow("Cost/Unit:", self.cost_per_unit_label)
 
-        yield_group.setLayout(yield_layout)
-        layout.addWidget(yield_group)
+        self.yield_group.setLayout(yield_layout)
+        layout.addWidget(self.yield_group)
 
         # Connect signals to refresh display if yield settings change
         self.bar_size_spin.valueChanged.connect(self.recipe_main.controller.update_calculations)
@@ -735,7 +721,6 @@ class CalculationResultsWidget(QWidget):
             # 1. Type Safety Check (Prevents the 'float' has no attribute 'get' crash)
             if not isinstance(results, dict): return
             #print(f"DEBUG: Weight: {results.get('total_oil_weight')} | Cost: {results.get('total_batch_cost')}")
-
 
             self.last_properties = results
             unit = results.get('unit_system_abbr', 'g')
@@ -763,7 +748,7 @@ class CalculationResultsWidget(QWidget):
 
             # 4. Masterbatch UI Logic
             is_mb = results.get('is_masterbatch', False)
-            log.debug(f"{is_mb}")
+            #log.debug(f"{is_mb}")
             # Toggle visibility of MB specific rows
             self.mb_pour_label.setVisible(is_mb)
             self.mb_pour_value.setVisible(is_mb)
@@ -792,74 +777,178 @@ class CalculationResultsWidget(QWidget):
             #log.debug(f"Setting Label Text {self.yield_label.text()}")
             self.cost_per_unit_label.setText(f"${cost_per_unit:.2f}")
 class RecipeParametersWidget(QWidget):
-    """Widget for recipe-specific parameters (Lye, Water, Superfat)"""
-    #parameters_changed = pyqtSignal()
+    """Widget for recipe-specific parameters (Lye, Water, Superfat) and Scent Profile"""
 
-    def __init__(self, calculator: SoapCalculator, parent=None):
+    def __init__(self, calculator, parent=None):
         super().__init__(parent)
         self.calculator = calculator
+        self.recipe_main = parent
         self.setup_ui()
+
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        # 1. Product Mode
+        mode_label = QLabel("Product Category:")
+        mode_label.setStyleSheet("font-weight: bold; color: #3F4238;")
+        self.product_mode_combo = QComboBox()
+        self.product_mode_combo.addItems(["Cold Process Soap", "Body Scrubs/Butters"])
+        self.product_mode_combo.currentIndexChanged.connect(self.toggle_calculation_mode)
+        layout.addWidget(mode_label)
+        layout.addWidget(self.product_mode_combo)
+
+        # 2. SOAP-SPECIFIC CONTAINER (Lye/Water Math)
+        self.soap_group_container = QWidget()
+        soap_layout = QVBoxLayout(self.soap_group_container)
+        soap_layout.setContentsMargins(0, 0, 0, 0)
 
         self.lye_combo = QComboBox()
         self.lye_combo.addItems(["NaOH", "KOH", "90% KOH"])
-        layout.addWidget(QLabel("Lye Type:"))
-        layout.addWidget(self.lye_combo)
+        soap_layout.addWidget(QLabel("Lye Type:"))
+        soap_layout.addWidget(self.lye_combo)
 
         self.superfat_spinbox = QDoubleSpinBox()
         self.superfat_spinbox.setRange(0, 25)
         self.superfat_spinbox.setValue(5)
-        layout.addWidget(QLabel("Superfat %:"))
-        layout.addWidget(self.superfat_spinbox)
+        soap_layout.addWidget(QLabel("Superfat %:"))
+        soap_layout.addWidget(self.superfat_spinbox)
 
         self.water_method_label = QLabel("Water Calculation:")
         self.water_method_combo = QComboBox()
         self.water_method_combo.addItems(["Water:Lye Ratio", "Water % of Oils", "Lye Concentration"])
-        self.water_method_combo.currentTextChanged.connect(self.on_water_method_changed)  # ADD THIS
-        layout.addWidget(self.water_method_label)
-        layout.addWidget(self.water_method_combo)
+        self.water_method_combo.currentTextChanged.connect(self.on_water_method_changed)
+        soap_layout.addWidget(self.water_method_label)
+        soap_layout.addWidget(self.water_method_combo)
 
-        self.water_value_spinbox = QDoubleSpinBox()
-        self.water_value_spinbox.setRange(0, 100)  # Set appropriate range
-        self.water_value_spinbox.setValue(2.0)  # Default ratio
         self.water_value_label = QLabel("Ratio:")
-        layout.addWidget(self.water_value_label)
-        layout.addWidget(self.water_value_spinbox)
+        self.water_value_spinbox = QDoubleSpinBox()
+        self.water_value_spinbox.setRange(0, 100)
+        self.water_value_spinbox.setValue(2.0)
+        soap_layout.addWidget(self.water_value_label)
+        soap_layout.addWidget(self.water_value_spinbox)
 
-        # MASTERBATCH UI - Define them
         self.masterbatch_check = QCheckBox("Use Masterbatch (50/50)")
+        self.masterbatch_check.stateChanged.connect(self.on_masterbatch_check)
+        soap_layout.addWidget(self.masterbatch_check)
+
         self.target_conc_label = QLabel("Final Target Conc %:")
         self.target_conc_spin = QDoubleSpinBox()
         self.target_conc_spin.setRange(25.0, 50.0)
         self.target_conc_spin.setValue(33.3)
-
-        # ADD THEM TO THE LAYOUT (Crucial step)
-        layout.addWidget(self.masterbatch_check)
-        layout.addWidget(self.target_conc_label)
-        layout.addWidget(self.target_conc_spin)
-
-        # INITIAL VISIBILITY
         self.target_conc_label.setVisible(False)
         self.target_conc_spin.setVisible(False)
+        soap_layout.addWidget(self.target_conc_label)
+        soap_layout.addWidget(self.target_conc_spin)
 
-        self.masterbatch_check.stateChanged.connect(self.on_masterbatch_check)
+        layout.addWidget(self.soap_group_container)
 
+        # 3. BODY PRODUCT / LUXURY DETAILS CONTAINER
+        # (This is the group we want to toggle)
+        self.luxury_details_container = QWidget()
+        luxury_layout = QVBoxLayout(self.luxury_details_container)
+        luxury_layout.setContentsMargins(0, 0, 0, 0)
 
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        luxury_layout.addWidget(line)
 
-    def on_masterbatch_check(self, checked):
+        # Process/Instructions Section
+        luxury_layout.addWidget(QLabel("The Process (Steps):"))
+        self.instructions_input = QTextEdit()
+        self.instructions_input.setPlaceholderText("Step 1: Melt oils...\nStep 2: Add lye solution...")
+        self.instructions_input.setMaximumHeight(100)
+        luxury_layout.addWidget(self.instructions_input)
+        # Scent Profile Group Box
+        self.scent_group_box = QGroupBox("Scent Profile")
+        self.scent_group_box.setStyleSheet("QGroupBox { font-weight: bold; color: #C5A059; border: 1px solid #DCDCDC; margin-top: 10px; padding-top: 10px; }")
+        scent_layout = QVBoxLayout()
+
+        # Top Notes
+        scent_layout.addWidget(QLabel("Top Note:"))
+        self.scent_top_name = QLineEdit()
+        self.scent_top_name.setPlaceholderText("e.g. Sweet Orange")
+        self.scent_top_desc = QLineEdit()
+        self.scent_top_desc.setPlaceholderText("e.g. Zesty & Fresh")
+        scent_layout.addWidget(self.scent_top_name)
+        scent_layout.addWidget(self.scent_top_desc)
+
+        # Mid Notes
+        scent_layout.addWidget(QLabel("Middle Note:"))
+        self.scent_mid_name = QLineEdit()
+        self.scent_mid_name.setPlaceholderText("e.g. Lavender")
+        self.scent_mid_desc = QLineEdit()
+        self.scent_mid_desc.setPlaceholderText("e.g. Floral & Calming")
+        scent_layout.addWidget(self.scent_mid_name)
+        scent_layout.addWidget(self.scent_mid_desc)
+
+        # Base Notes
+        scent_layout.addWidget(QLabel("Base Note:"))
+        self.scent_base_name = QLineEdit()
+        self.scent_base_name.setPlaceholderText("e.g. Sandalwood")
+        self.scent_base_desc = QLineEdit()
+        self.scent_base_desc.setPlaceholderText("e.g. Warm & Woody")
+        scent_layout.addWidget(self.scent_base_name)
+        scent_layout.addWidget(self.scent_base_desc)
+
+        self.scent_group_box.setLayout(scent_layout)
+        luxury_layout.addWidget(self.scent_group_box)
+
+        layout.addWidget(self.luxury_details_container)
+
+        # Default state: Show soap, hide luxury if it starts in soap mode
+        self.luxury_details_container.setVisible(False)
+
+        layout.addStretch()
+
+    def toggle_calculation_mode(self):
+        """Hides soap math in Body Mode, hides luxury info in Soap Mode"""
+        is_body_product = self.product_mode_combo.currentText() == "Body Scrubs/Butters"
+        results_ui = self.recipe_main.results_widget
+
+        # Toggle containers
+        self.soap_group_container.setVisible(not is_body_product)
+        self.luxury_details_container.setVisible(is_body_product) # Hides in Soap, Shows in Body
+
+        # Toggle Middle Column (Additives Section)
+        if hasattr(self.recipe_main, 'additives_section_container'):
+            self.recipe_main.additives_section_container.setVisible(not is_body_product)
+
+        # Toggle Results UI Visibility
+        if hasattr(results_ui, 'yield_group'):
+            results_ui.yield_group.setVisible(not is_body_product)
+
+        soap_only_rows = ["Water Weight", "Lye Weight"]
+        weights_layout = results_ui.weights_group.layout()
+
+        for row_name in soap_only_rows:
+            if row_name in results_ui.row_widgets:
+                row_label, row_value = results_ui.row_widgets[row_name]
+                row_label.setVisible(not is_body_product)
+                row_value.setVisible(not is_body_product)
+
+                row_idx = weights_layout.getWidgetPosition(row_label)[0]
+                if row_idx != -1:
+                    weights_layout.setRowVisible(row_idx, not is_body_product)
+
+        if hasattr(results_ui, 'weights_group'):
+            results_ui.weights_group.layout().invalidate()
+            results_ui.weights_group.adjustSize()
+
+        if hasattr(self.recipe_main, 'controller'):
+            self.recipe_main.controller.update_calculations()
+
+    def on_masterbatch_check(self, state):
+        checked = state == 2
         self.target_conc_label.setVisible(checked)
         self.target_conc_spin.setVisible(checked)
         self.water_method_combo.setVisible(not checked)
         self.water_value_spinbox.setVisible(not checked)
         self.water_value_label.setVisible(not checked)
 
-
-    # ADD THIS NEW METHOD
-
     def on_water_method_changed(self, text):
-        """Update label and spinbox range based on water method"""
         if text == "Water:Lye Ratio":
             self.water_value_label.setText("Ratio:")
             self.water_value_spinbox.setRange(1.0, 5.0)
@@ -867,15 +956,10 @@ class RecipeParametersWidget(QWidget):
         elif text == "Water % of Oils":
             self.water_value_label.setText("Water %:")
             self.water_value_spinbox.setRange(0, 100)
-            self.water_value_spinbox.setValue(38.0)
-        elif text == "Lye Concentration":
-            self.water_value_label.setText("Concentration %:")
-            self.water_value_spinbox.setRange(1, 99)
-            self.water_value_spinbox.setValue(33.0)
+            self.water_
 
-    def on_mb_change(self, value):
-        self.controller.update_calculations(value)
-        return
+    def get_instructions(self) -> str:
+        return self.instructions_input.toPlainText()
 class RecipeNotesWidget(QWidget):
     """Widget for recipe notes and instructions"""
 

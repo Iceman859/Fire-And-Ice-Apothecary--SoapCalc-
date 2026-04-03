@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
             ThemeManager.apply(self)
             # 3. CREATE THE UI
             self.setup_ui()
-            self.controller = RecipeController(self, self.calculator, self.cost_manager, self.recipe_manager, self.batch_manager)
+            self.controller.setup_controller_connections()
             # 4. BRIDGING: Map Tab variables to MainWindow
             self.recipe_settings = self.recipe_tab.recipe_settings
             self.oil_input_widget = self.recipe_tab.oil_input_widget
@@ -89,6 +89,11 @@ class MainWindow(QMainWindow):
             self.oils_table.setModel(self.recipe_model)
             # First: Connect the wires
             self.connect_signals()
+
+            #Context Menu For Deletion of OILS
+            # Enable right-click menu for the Oils Table
+            self.oils_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.oils_table.customContextMenuRequested.connect(self.controller.show_oil_context_menu)
 
             # Second: Mute the entire Window so load_preferences doesn't trigger signals
             self.blockSignals(True)
@@ -109,16 +114,13 @@ class MainWindow(QMainWindow):
 
         main_layout = QVBoxLayout()
 
-        # Title
-        # title = QLabel("Fire & Ice Apothecary")
-        title = QLabel(
-            '<span style="color: #FF4500;">Fire</span> & <span style="color: #00BFFF;">Ice</span> Apothecary'
-        )
-        title_font = QFont()
-        title_font.setPointSize(16)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        main_layout.addWidget(title)
+        #OPTIONAL TITLE FOR MAIN WINDOW
+        #title = QLabel('Fire & Ice Apothecary' )
+        #title_font = QFont()
+        #title_font.setPointSize(16)
+        #title_font.setBold(True)
+        #title.setFont(title_font)
+        #main_layout.addWidget(title)
 
         # Create tabs
         tabs = QTabWidget()
@@ -249,6 +251,7 @@ class MainWindow(QMainWindow):
             self.recipe_tab.save_btn.clicked.connect(self.controller.perform_save)
             self.recipe_tab.load_btn.clicked.connect(self.controller.on_load_clicked)
             self.recipe_tab.scale_btn.clicked.connect(self.controller.on_scale_clicked)
+            self.recipe_tab.import_btn.clicked.connect(self.controller.on_import_clicked)
             self.recipe_tab.log_btn.clicked.connect(self.controller.log_batch)
             # Connect the oil input widget to the refresh functions
             #self.oil_input_widget.oil_added.connect(self.controller.update_oils_table)
@@ -268,9 +271,9 @@ class MainWindow(QMainWindow):
         # If switching to Print tab (index check or widget check)
         if self.tabs.widget(index) == self.print_tab:
             notes = self.recipe_tab.notes_widget.get_notes()
-
+            instructions = self.recipe_settings.get_instructions()
             self.report_widget.refresh_report(
-                self.current_recipe.name or "Unsaved Recipe", notes
+                self.current_recipe.name or "Untitled Formulation", notes, instructions
             )
         # Refresh fragrance list when switching to recipe tab (in case inventory changed)
         if index == 0:  # Recipe Tab
@@ -676,5 +679,10 @@ class MainWindow(QMainWindow):
         self.save_preferences()
 
     def get_current_mode(self):
-        """Returns the currently active mode from the UI"""
-        return "Soap"
+        """Reach into the recipe tab and see what the dropdown says"""
+        try:
+            # This assumes your dropdown is in recipe_settings and called 'mode_combo'
+            return self.recipe_tab.recipe_settings.product_mode_combo.currentText()
+        except AttributeError:
+            # Fallback if the widget isn't found
+            return "Soap"

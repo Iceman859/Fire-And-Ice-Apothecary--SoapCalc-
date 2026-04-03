@@ -4,9 +4,8 @@ from PyQt6.QtWidgets import QInputDialog, QFileDialog, QMessageBox, QTableWidget
 from PyQt6.QtCore import Qt
 from src.models.recipe import Recipe
 from src.utils.logger import log
-
-
 from src.utils.logger import log
+from src.utils.html_helper import parse_artisan_html_recipe, extract_extended_notes
 
 class RecipeController:
     def __init__(self, view, calculator, cost_manager, recipe_manager, batch_manager):
@@ -17,143 +16,177 @@ class RecipeController:
         self.recipe_manager = recipe_manager
         self.batch_manager = batch_manager
 
+        if hasattr(self.view, 'recipe_tab'):
+            self.setup_controller_connections()
+
+
+    def setup_controller_connections(self):
+            """Connects signals and context menus once the UI is built."""
+            # 1. Right-click logic
+            self.view.recipe_tab.additives_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.view.recipe_tab.additives_table.customContextMenuRequested.connect(self.show_additive_context_menu)
+
+            # 2. Additive/Fragrance signals - CONNECT TO BOTH REFRESH AND MATH
+            if hasattr(self.view.recipe_tab, 'fragrance_widget'):
+                self.view.recipe_tab.fragrance_widget.fragrance_added.connect(self.refresh_additives_table)
+                self.view.recipe_tab.fragrance_widget.fragrance_added.connect(self.update_calculations)
+
+            if hasattr(self.view.recipe_tab, 'additive_widget'):
+                self.view.recipe_tab.additive_widget.additive_added.connect(self.refresh_additives_table)
+                self.view.recipe_tab.additive_widget.additive_added.connect(self.update_calculations)
+
+    def show_oil_context_menu(self, position):
+            """Triggered when right-clicking the oils table."""
+            from PyQt6.QtWidgets import QMenu
+
+            # Figure out which row was clicked
+            index = self.view.oils_table.indexAt(position)
+            if not index.isValid():
+                return
+
+            menu = QMenu()
+            delete_action = menu.addAction("Remove Oil")
+
+            # Show the menu at the cursor position
+            action = menu.exec(self.view.oils_table.viewport().mapToGlobal(position))
+
+            if action == delete_action:
+                self.remove_oil_at_index(index.row())
+
+    def remove_oil_at_index(self, row_index):
+        """Tells the model to delete the oil and refreshes the math."""
+        # 1. Tell the Model to perform the deletion
+        # This ensures the Calculator's internal dictionary is updated
+        self.view.recipe_model.removeRow(row_index)
+
+        # 2. Recalculate everything now that an oil is gone
+        self.update_calculations()
+
+        # 3. Refresh additives in case their weights (based on % of oils) changed
+        self.refresh_additives_table()
+
     def update_calculations(self):
-        """Main calculation engine. Pulls from UI, runs math, pushes to UI."""
-        try:
+            """Main calculation engine. Pulls from UI, runs math, pushes to UI."""
+            try:
+                # --- PRODUCT MODE CHECK ---
+                is_body_product = False
+                settings = self.view.recipe_tab.recipe_settings
+                if hasattr(settings, 'product_mode_combo'):
+                    is_body_product = settings.product_mode_combo.currentText() == "Body Scrubs/Butters"
 
-            if hasattr(self.view.recipe_tab, 'recipe_model'):
-                self.view.recipe_tab.recipe_model.unit_system = self.calculator.unit_system
-            # 0. SYNC UNIT SYSTEM TO MODEL AND CALCULATOR
-                # Get the current unit from calculator
-                unit_system = self.calculator.unit_system
+                if hasattr(self.view.recipe_tab, 'recipe_model'):
+                    self.view.recipe_tab.recipe_model.unit_system = self.calculator.unit_system
 
-                # Sync to model FIRST
-                if hasattr(self.view, 'recipe_model'):
-                    self.view.recipe_model.unit_system = unit_system
+                    unit_system = self.calculator.unit_system
 
-                # CRITICAL: Ensure calculator knows the current unit system
-                # (this is set in MainWindow, but verify it here)
-                #log.debug(f"Current unit_system: {unit_system}")
+                    if hasattr(self.view, 'recipe_model'):
+                        self.view.recipe_model.unit_system = unit_system
 
                 # 1. Sync settings from UI to Calculator
-                settings = self.view.recipe_tab.recipe_settings
+                unit_system = self.calculator.unit_system
 
-            # Sync Unit System
-            unit_system = self.calculator.unit_system  # Use calculator's unit directly
+                # Only sync soap-specific math if NOT in body product mode
+                if not is_body_product:
+                    sf = settings.superfat_spinbox.value()
+                    self.calculator.set_superfat(sf)
 
-            # Superfat
-            sf = settings.superfat_spinbox.value()
-            self.calculator.set_superfat(sf)
+                    self.calculator.set_lye_type(settings.lye_combo.currentText())
 
-            # Lye Type
-            self.calculator.set_lye_type(settings.lye_combo.currentText())
+                    method_map = {
+                        "Water:Lye Ratio": "ratio",
+                        "Water % of Oils": "percent",
+                        "Lye Concentration": "concentration"
+                    }
+                    method_text = settings.water_method_combo.currentText()
+                    method_key = method_map.get(method_text, "ratio")
+                    method_val = settings.water_value_spinbox.value()
+                    self.calculator.set_water_calc_method(method_key, method_val)
 
-            # Water calculation method
-            method_map = {
-                "Water:Lye Ratio": "ratio",
-                "Water % of Oils": "percent",
-                "Lye Concentration": "concentration"
-            }
-            method_text = settings.water_method_combo.currentText()
-            method_key = method_map.get(method_text, "ratio")
-            method_val = settings.water_value_spinbox.value()
-            self.calculator.set_water_calc_method(method_key, method_val)
+                # 2. Perform math in the Calculator
+                results = self.calculator.get_batch_properties()
+                results['unit_system_abbr'] = self.calculator.get_unit_abbreviation()
 
-            # 2. Perform math in the Calculator (this handles unit conversion internally)
-            results = self.calculator.get_batch_properties()
-            results['unit_system_abbr'] = self.calculator.get_unit_abbreviation()
+                # --- OVERWRITE FOR BODY PRODUCTS ---
+                if is_body_product:
+                    results['lye_weight'] = 0.0
+                    results['water_weight'] = 0.0
+                    # Total weight is just oils + additives
+                    oil_total = sum(self.calculator.oils.values())
+                    additive_total = sum(self.calculator.additives.values())
+                    results['total_batch_weight'] = oil_total + additive_total
 
-            # 3. Calculate Financials from current oils
-            total_cost = 0.0
-            for oil_name, weight_g in self.calculator.oils.items():
-                if self.cost_manager:
-                    cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
-                    if cost_per_g:
-                        total_cost += cost_per_g * weight_g
+                # 3. Calculate Financials from current oils
+                total_cost = 0.0
+                for oil_name, weight_g in self.calculator.oils.items():
+                    if self.cost_manager:
+                        cost_per_g = self.cost_manager.get_cost_per_gram(oil_name)
+                        if cost_per_g:
+                            total_cost += cost_per_g * weight_g
 
-            # Add additive costs
-            for additive_name, weight_g in self.calculator.additives.items():
-                if self.cost_manager:
-                    cost_per_g = self.cost_manager.get_cost_per_gram(additive_name)
-                    if cost_per_g:
-                        total_cost += cost_per_g * weight_g
+                for additive_name, weight_g in self.calculator.additives.items():
+                    if self.cost_manager:
+                        cost_per_g = self.cost_manager.get_cost_per_gram(additive_name)
+                        if cost_per_g:
+                            total_cost += cost_per_g * weight_g
 
-            results['total_batch_cost'] = total_cost
+                results['total_batch_cost'] = total_cost
 
-            # 4. Masterbatch Logic (if enabled)
-            is_mb = settings.masterbatch_check.isChecked()
-            results['is_masterbatch'] = is_mb
+                # 4. Masterbatch Logic (if enabled and NOT a body product)
+                is_mb = settings.masterbatch_check.isChecked() and not is_body_product
+                results['is_masterbatch'] = is_mb
 
-            if is_mb:
-                results_widget = self.view.recipe_settings
+                if is_mb:
+                    target_final = settings.target_conc_spin.value()
+                    lye_grams = results.get('lye_weight', 0)
+                    mb_math = self.calculator.calculate_masterbatch_pour(
+                        target_lye_grams=lye_grams,
+                        mb_concentration=50.0,
+                        final_target_conc=target_final
+                    )
+                    results.update(mb_math)
 
+                # 5. Yield & Unit Cost Calculation
+                results_widget = self.view.results_widget
+                bar_size = results_widget.bar_size_spin.value()
+                pkg_cost = results_widget.pkg_cost_spin.value()
+                total_batch_weight = results.get('total_batch_weight', 0.0)
 
-
-                target_final = settings.target_conc_spin.value()
-                lye_grams = results.get('lye_weight', 0)  # This should be the original gram value
-                mb_math = self.calculator.calculate_masterbatch_pour(
-                    target_lye_grams=lye_grams,
-                    mb_concentration=50.0,
-                    final_target_conc=target_final
-                )
-                results.update(mb_math)
-
-            # 5. Yield & Unit Cost Calculation
-            results_widget = self.view.results_widget
-
-            bar_size = results_widget.bar_size_spin.value()
-            #log.debug(f"Bar Size: {bar_size}")
-
-            pkg_cost = results_widget.pkg_cost_spin.value()
-            #log.debug(f"Package Cost: {pkg_cost}")
-
-            total_batch_weight = results.get('total_batch_weight', 0.0)
-
-
-            if bar_size > 0:
-                # 1. How many bars? (Total Weight / Size of one bar)
-                results['est_yield'] = total_batch_weight / bar_size
-
-                if results['est_yield'] > 0:
-                    # 2. Add the packaging cost to the big total
-                    results['total_batch_cost'] += (pkg_cost * results['est_yield'])
-
-                    # 3. THE MISSING PIECE: Divide the Big Total Cost by the Number of Bars
-                    results['cost_per_unit'] = results['total_batch_cost'] / results['est_yield']
+                if bar_size > 0:
+                    results['est_yield'] = total_batch_weight / bar_size
+                    if results['est_yield'] > 0:
+                        results['total_batch_cost'] += (pkg_cost * results['est_yield'])
+                        results['cost_per_unit'] = results['total_batch_cost'] / results['est_yield']
+                    else:
+                        results['cost_per_unit'] = 0.0
                 else:
+                    results['est_yield'] = 0.0
                     results['cost_per_unit'] = 0.0
-            else:
-                results['est_yield'] = 0.0
-                results['cost_per_unit'] = 0.0
 
-            # 6. Push to Results Widget
-            results_widget.update_display(results)
+                # 6. Push to Results Widget
+                results['is_body_product'] = is_body_product
+                results_widget.update_display(results)
 
-            # 7. Update Tables (with model refresh)
-            self.view._suppress_oils_table_signals = True
-            self.view._suppress_additives_table_signals = True
+                # 7. Update Tables (with model refresh)
+                self.view._suppress_oils_table_signals = True
+                self.view._suppress_additives_table_signals = True
 
-            try:
-                # Refresh the oils table model
-                if hasattr(self.view.recipe_tab, 'recipe_model'):
-                    self.view.recipe_tab.recipe_model.layoutChanged.emit()
+                try:
+                    if hasattr(self.view.recipe_tab, 'recipe_model'):
+                        self.view.recipe_tab.recipe_model.layoutChanged.emit()
 
-                # Update additives table (still using old method if it exists)
-                if hasattr(self.view, 'update_additives_table'):
-                    self.view.update_additives_table()
+                    if hasattr(self.view, 'update_additives_table'):
+                        self.view.update_additives_table()
+                except Exception as e:
+                    log.error(f"Table refresh failed: {e}")
+                finally:
+                    self.view._suppress_oils_table_signals = False
+                    self.view._suppress_additives_table_signals = False
+
+                    if hasattr(self.view, 'recipe_model'):
+                        self.view.recipe_model.layoutChanged.emit()
+
             except Exception as e:
-                log.error(f"Table refresh failed: {e}")
-            finally:
-                # CRITICAL: Re-enable signals
-                self.view._suppress_oils_table_signals = False
-                self.view._suppress_additives_table_signals = False
-
-                #SEND THE BATSIGNAL
-                if hasattr(self.view, 'recipe_model'):
-                    self.view.recipe_model.layoutChanged.emit()
-
-        except Exception as e:
-            log.error(f"Error in update_calculations: {e}", exc_info=True)
+                log.error(f"Error in update_calculations: {e}", exc_info=True)
 
     def refresh_additives_table(self):
         """Manually populates the additive QTableWidget from the calculator data."""
@@ -192,10 +225,28 @@ class RecipeController:
             cost = cost_per_g * weight_g
             table.setItem(row, 3, QTableWidgetItem(f"${cost:.2f}"))
 
+    def remove_selected_additive(self):
+            """Removes the highlighted additive row and updates math."""
+            table = self.view.recipe_tab.additives_table
+            selected = table.selectedItems()
+            if not selected:
+                return
+
+            # Get the name from the first column of the selected row
+            row = selected[0].row()
+            name = table.item(row, 0).text()
+
+            if name in self.calculator.additives:
+                del self.calculator.additives[name]
+                self.refresh_additives_table()
+                self.update_calculations()
+                self.view.statusBar().showMessage(f"Removed {name}")
+
     def on_new_clicked(self):
         """Resets the state for a brand new recipe."""
         self.calculator.oils.clear()
         self.calculator.additives.clear()
+        self.view.recipe_tab.additives_table.setRowCount(0)
         self.view.recipe_tab.notes_widget.set_notes("")
         self.view.current_recipe = Recipe()
         self.view.current_recipe.name = "New Recipe"
@@ -276,18 +327,44 @@ class RecipeController:
             self.view.inventory_widget.refresh_table()
 
     def perform_save(self):
-        """Logic for saving the recipe to a JSON file."""
-        name, ok = QInputDialog.getText(self.view, "Save", "Recipe Name:", text=self.view.current_recipe.name)
-        if ok and name:
-            self.view.current_recipe.name = name
-            self.view.current_recipe.oils = self.calculator.oils.copy()
-            self.view.current_recipe.additives = self.calculator.additives.copy()
-            self.view.current_recipe.notes = self.view.recipe_tab.notes_widget.get_notes()
+            """Logic for saving the recipe including new Luxury Formulation data."""
+            # Check if we have a name, or ask for one
+            current_name = self.view.current_recipe.name or ""
+            name, ok = QInputDialog.getText(self.view, "Save", "Recipe Name:", text=current_name)
 
-            path = self.recipe_manager.save_recipe(self.view.current_recipe)
-            if path:
-                self.view.statusBar().showMessage(f"Saved to {os.path.basename(path)}")
-                self.view.manager_widget.refresh_recipe_list()
+            if ok and name:
+                recipe = self.view.current_recipe
+                ui = self.view.recipe_settings  # Pointing to your settings tab
+
+                # --- Standard Data ---
+                recipe.name = name
+                recipe.oils = self.calculator.oils.copy()
+                recipe.additives = self.calculator.additives.copy()
+                recipe.notes = self.view.recipe_tab.notes_widget.get_notes()
+
+                # --- NEW: Luxury Formulation Data ---
+                # 1. Scent Profile
+                recipe.scent_top = {
+                    "name": ui.scent_top_name.text(),
+                    "description": ui.scent_top_desc.text()
+                }
+                recipe.scent_mid = {
+                    "name": ui.scent_mid_name.text(),
+                    "description": ui.scent_mid_desc.text()
+                }
+                recipe.scent_base = {
+                    "name": ui.scent_base_name.text(),
+                    "description": ui.scent_base_desc.text()
+                }
+
+                # 2. Manufacturing Instructions
+                recipe.instructions = self.view.recipe_settings.get_instructions()
+
+                # --- Execute Save ---
+                path = self.recipe_manager.save_recipe(recipe)
+                if path:
+                    self.view.statusBar().showMessage(f"Successfully saved {name}")
+                    self.view.manager_widget.refresh_recipe_list()
 
     def perform_load(self, filepath):
         try:
@@ -296,10 +373,11 @@ class RecipeController:
 
             loaded = Recipe.from_dict(data)
             # ... name logic ...
-
+            self.view.recipe_tab.recipe_name_label.setText(loaded.name)
             # 1. Update the underlying data
             self.calculator.oils = loaded.oils.copy()
             self.calculator.additives = data.get("additives", {}).copy()
+            self.refresh_additives_table()
             self.view.current_recipe = loaded
 
             # 2. IMPORTANT: Tell the UI the table has changed
@@ -317,3 +395,81 @@ class RecipeController:
             filepath, _ = QFileDialog.getOpenFileName(self.view, "Load Recipe", "recipes", "JSON (*.json)")
         if filepath:
             self.perform_load(filepath)
+
+    def on_import_clicked(self):
+        parent_widget = self.view if hasattr(self, 'view') else None
+        file_name, _ = QFileDialog.getOpenFileName(parent_widget, "Open Recipe HTML", "", "HTML Files (*.html)")
+
+        if not file_name:
+            return
+
+        # 1. Parse the file once
+        data = parse_artisan_html_recipe(file_name)
+
+        if data:
+            # 2. Set the Title/Name
+            recipe_name = data.get('title', "Unknown Recipe")
+            self.view.current_recipe.name = recipe_name
+
+            if hasattr(self.view.recipe_tab, 'recipe_name_input'):
+                self.view.recipe_tab.recipe_name_input.setText(recipe_name)
+
+            # 3. Import Ingredients (The Oils/Fats)
+            # We clear the existing list first if your UI supports it,
+            # then loop through every phase found in the HTML.
+            for phase_name, ingredients in data.get("phases", {}).items():
+                for ing in ingredients:
+                    # Pointing to oil_input_widget as per your previous snippet
+                    if hasattr(self.view, 'oil_input_widget'):
+                        self.view.oil_input_widget.add_oil_from_import(ing["name"], ing["weight"])
+
+            # 4. Refresh the Table Model
+            if hasattr(self.view.recipe_tab, 'recipe_model'):
+                self.view.recipe_tab.recipe_model.beginResetModel()
+                self.view.recipe_tab.recipe_model.endResetModel()
+
+            # 5. Update Math
+            self.update_calculations()
+
+            # 6. DISTRIBUTE LUXURY DATA TO recipe_settings
+            try:
+                ext = data.get("extended_data", {})
+                # Updated to your actual variable name: recipe_settings
+                ui = self.view.recipe_settings
+
+                # Set Instructions
+                if hasattr(ui, 'instructions_input'):
+                    ui.instructions_input.setPlainText(ext.get("instructions", ""))
+
+                # Set Scent Profile (Top, Mid, Base)
+                # We pull from the nested dicts we created in extract_extended_notes
+                scents = {
+                    "top": (ui.scent_top_name, ui.scent_top_desc, ext.get("scent_top", {})),
+                    "mid": (ui.scent_mid_name, ui.scent_mid_desc, ext.get("scent_mid", {})),
+                    "base": (ui.scent_base_name, ui.scent_base_desc, ext.get("scent_base", {}))
+                }
+
+                for prefix, (name_field, desc_field, val_dict) in scents.items():
+                    if name_field and desc_field:
+                        name_field.setText(str(val_dict.get("name", "")))
+                        desc_field.setText(str(val_dict.get("description", "")))
+
+                # Set the Artisan's Note
+                if hasattr(self.view.recipe_tab, 'notes_widget'):
+                    note_text = ext.get("notes", "")
+                    # Direct check to see if notes_widget is a QTextEdit or custom
+                    if hasattr(self.view.recipe_tab.notes_widget, 'setPlainText'):
+                        self.view.recipe_tab.notes_widget.setPlainText(note_text)
+                    else:
+                        self.view.recipe_tab.notes_widget.set_notes(note_text)
+
+            except Exception as e:
+                print(f"Error distributing extended data to recipe_settings: {e}")
+
+    def show_additive_context_menu(self, position):
+            from PyQt6.QtWidgets import QMenu
+            menu = QMenu()
+            delete_action = menu.addAction("Delete Additive")
+            action = menu.exec(self.view.recipe_tab.additives_table.mapToGlobal(position))
+            if action == delete_action:
+                self.remove_selected_additive()

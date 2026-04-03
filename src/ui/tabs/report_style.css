@@ -1,0 +1,218 @@
+/* Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@300;400;500;600&display=swap');
+
+:root {
+    --sage: #6B705C;
+    --gold: #C5A059;
+    --charcoal: #3F4238;
+    --cream: #F9F8F4;
+}
+
+body {
+    background-color: var(--cream);
+    color: var(--charcoal);
+    font-family: 'Montserrat', sans-serif;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Layout */
+.report-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 1rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+    .report-container {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+
+/* Header */
+.luxury-header {
+    background-color: var(--charcoal);
+    color: var(--cream);
+    padding: 3rem 1.5rem;
+    text-align: center;
+    position: relative;
+}
+
+.brand-tag {
+    color: var(--gold);
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.recipe-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5rem;
+    font-style: italic;
+    margin: 0 0 1rem 0;
+}
+
+.batch-meta {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(107, 112, 92, 0.3);
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    font-size: 0.875rem;
+}
+
+/* Cards */
+.glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(107, 112, 92, 0.1);
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.phase-header {
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+}
+
+.phase-header.sage {
+    background-color: var(--sage);
+}
+
+.phase-header.charcoal {
+    background-color: var(--charcoal);
+}
+
+.phase-badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 700;
+    background-color: var(--gold);
+    color: var(--charcoal);
+}
+
+/* Tables */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.data-table thead {
+    background-color: rgba(107, 112, 92, 0.05);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--sage);
+}
+
+.data-table th,
+.data-table td {
+    padding: 1rem 1.5rem;
+}
+
+.data-table tbody tr {
+    border-bottom: 1px solid rgba(107, 112, 92, 0.1);
+}
+
+/* Scent Section */
+.scent-row {
+    margin-bottom: 1.5rem;
+}
+
+.scent-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.scent-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+}
+
+.scent-mood {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--sage);
+}
+
+.progress-bg {
+    height: 4px;
+    width: 100%;
+    background-color: rgba(107, 112, 92, 0.1);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--gold);
+    transition: width 0.7s ease;
+}
+
+/* Typography Helpers */
+.process-content,
+.notes-content {
+    font-family: 'montserat', sans-serif;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 0.875rem;
+}
+
+h3 {
+    font-size: 1.25rem;
+    font-family: 'Playfair Display';
+    color: var(--gold) !important;
+    margin-top: 0;
+}
+
+/* Sidebar Performance Bars */
+.perf-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.stat-row {
+    margin-bottom: 1rem;
+}
+
+.stat-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--charcoal);
+    margin-bottom: 4px;
+}
+
+.stat-bar-bg {
+    height: 6px;
+    background: rgba(107, 112, 92, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    background: var(--gold);
+}

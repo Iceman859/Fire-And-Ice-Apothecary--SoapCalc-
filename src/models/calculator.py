@@ -20,6 +20,14 @@ class SoapCalculator:
             27.0  # % concentration (used when water_calc_method = "concentration")
         )
         self.additives = {}  # {name: weight_in_grams or percent_of_oils}
+        self.locked_oils = set()
+
+
+    def toggle_lock(self, oil_name, is_locked):
+        if is_locked:
+            self.locked_oils.add(oil_name)
+        else:
+            self.locked_oils.discard(oil_name)
 
     def add_oil(self, oil_name: str, weight: float):
         """Add or update oil in the recipe"""
@@ -132,6 +140,9 @@ class SoapCalculator:
         water = self.get_water_weight()
 
         total_weight = total_oil + lye + water
+        #Added Additive weight to total batch weight calculation
+        additive_weight = sum(self.additives.values())
+        total_weight = total_oil + lye + water + additive_weight
 
         # Fatty acid breakdown (weighted average)
         fa_keys = [
@@ -362,12 +373,8 @@ class SoapCalculator:
         }
 
     def calculate_masterbatch_pour(self, target_lye_grams, mb_concentration=50.0, final_target_conc=33.3):
-        """
-        mb_concentration: The concentration of your premixed lye (usually 50.0)
-        final_target_conc: What you want the final soap to be (e.g. 33.3 for a 2:1)
-        """
+        """Calculates Masterbatch pour and extra water needed to achieve a target lye concentration in the final batch."""
         # 1. Total weight of the 50/50 solution needed to get the required dry lye
-        # If you need 100g lye, you need 200g of 50/50 solution.
         total_mb_pour = target_lye_grams / (mb_concentration / 100)
 
         # 2. Total water required for the FINAL target concentration
@@ -385,85 +392,52 @@ class SoapCalculator:
             "extra_water_to_add": max(0, extra_water)
         }
 
-
     def rebalance_oils(self, edited_name: str, new_percentage: float):
-        """
-        Adjusts all UNLOCKED oils proportionally when one percentage is edited,
-        maintaining the total batch weight.
-        """
-        if not self.oils or self.get_total_oil_weight() <= 0:
-            return
-
-        if not hasattr(self, 'locked_oils'):
-            self.locked_oils = set()
-
-        # 1. Capture the current total weight we need to maintain
-        target_total_weight = self.get_total_oil_weight()
-
-        # 2. Convert current weights (grams) to percentages
-        current_percentages = {
-            name: (weight / target_total_weight * 100)
-            for name, weight in self.oils.items()
-        }
-
-        # 3. Calculate the Delta (difference in percentage)
-        old_percentage = current_percentages.get(edited_name, 0)
-        delta = new_percentage - old_percentage
-
-        # 4. Update the edited oil's percentage
-        current_percentages[edited_name] = new_percentage
-
-        # 5. Identify adjustable oils (not edited, not locked)
-        adjustable_names = [
-            name for name in self.oils.keys()
-            if name != edited_name and name not in self.locked_oils
-        ]
-
-        total_adjustable_pct = sum(current_percentages[name] for name in adjustable_names)
-
-        # 6. Redistribute the delta across adjustable oils
-        if total_adjustable_pct > 0:
-            for name in adjustable_names:
-                share = current_percentages[name] / total_adjustable_pct
-                current_percentages[name] -= delta * share
-        elif adjustable_names:
-            # Fallback: if other oils were at 0%, split the delta equally
-            split_delta = delta / len(adjustable_names)
-            for name in adjustable_names:
-                current_percentages[name] -= split_delta
-
-        # 7. Convert percentages back to weights and update self.oils
-        for name, pct in current_percentages.items():
-            # Clamp to 0-100 and calculate weight
-            final_pct = max(0, min(100, pct))
-            self.oils[name] = round((final_pct / 100) * target_total_weight, 2)
             """
-            Adjusts all UNLOCKED oils proportionally when one is edited.
+            Adjusts all UNLOCKED oils proportionally when one percentage is edited,
+            maintaining the total batch weight.
             """
-            if not hasattr(self, 'locked_oils'):
-                self.locked_oils = set()
+            if not self.oils:
+                return
 
-            # 1. Calculate the change (Delta)
-            old_percentage = self.oils.get(edited_name, 0) # Adjust based on your dict key
+            # 1. Capture the current total weight in grams
+            target_total_weight = sum(self.oils.values())
+            if target_total_weight <= 0:
+                return
+
+            # 2. Convert current weights to percentages
+            current_percentages = {
+                name: (weight / target_total_weight * 100)
+                for name, weight in self.oils.items()
+            }
+
+            # 3. Calculate the difference
+            old_percentage = current_percentages.get(edited_name, 0)
             delta = new_percentage - old_percentage
 
-            # 2. Update the edited oil
-            self.oils[edited_name] = new_percentage
+            # 4. Update the edited oil
+            current_percentages[edited_name] = new_percentage
 
-            # 3. Identify candidates for adjustment (Not the one edited, not locked)
-            adjustable_oils = [
+            # 5. Identify adjustable oils (Not edited, not locked)
+            locked = getattr(self, 'locked_oils', set())
+            adjustable_names = [
                 name for name in self.oils.keys()
-                if name != edited_name and name not in self.locked_oils
+                if name != edited_name and name not in locked
             ]
 
-            total_adjustable_pct = sum(self.oils[name] for name in adjustable_oils)
+            total_adjustable_pct = sum(current_percentages[name] for name in adjustable_names)
 
-            # 4. Redistribute the delta
+            # 6. Redistribute the delta
             if total_adjustable_pct > 0:
-                for name in adjustable_oils:
-                    share = self.oils[name] / total_adjustable_pct
-                    self.oils[name] -= delta * share
+                for name in adjustable_names:
+                    share = current_percentages[name] / total_adjustable_pct
+                    current_percentages[name] -= delta * share
+            elif adjustable_names:
+                split_delta = delta / len(adjustable_names)
+                for name in adjustable_names:
+                    current_percentages[name] -= split_delta
 
-            # Ensure no negative percentages (clamping)
-            for name in self.oils:
-                self.oils[name] = max(0, self.oils[name])
+            # 7. Final conversion back to grams
+            for name, p_val in current_percentages.items():
+                final_pct = max(0, min(100, p_val))
+                self.oils[name] = round((final_pct / 100) * target_total_weight, 2)

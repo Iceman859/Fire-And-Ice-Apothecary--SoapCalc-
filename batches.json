@@ -1,5 +1,56 @@
 [
     {
+        "id": "1a791cbb-b5cb-4f4f-97ed-d2708232100e",
+        "lot_number": "20260330-8E0C",
+        "recipe_name": "1LB Coconut",
+        "date_made": "2026-03-30",
+        "cure_date": "2026-04-27",
+        "status": "Curing",
+        "total_weight": 16.49,
+        "recipe_snapshot": {
+            "oils": {
+                "Coconut Oil": 348.69913413
+            },
+            "superfat_percent": 7.0,
+            "water_to_lye_ratio": 2.0,
+            "lye_type": "NaOH",
+            "unit_system": "ounces",
+            "water_calc_method": "concentration",
+            "water_percent": 38.0,
+            "lye_concentration": 50.0,
+            "properties": {
+                "total_oil_weight": 12.3,
+                "lye_weight": 2.094,
+                "water_weight": 2.09,
+                "total_batch_weight": 16.49,
+                "lye_percentage": 17.02,
+                "water_percentage": 17.02,
+                "fa_breakdown": {
+                    "lauric": 48.0,
+                    "myristic": 19.0,
+                    "palmitic": 9.0,
+                    "stearic": 3.0,
+                    "oleic": 8.0,
+                    "linoleic": 2.0,
+                    "linolenic": 0.0,
+                    "ricinoleic": 0.0
+                },
+                "relative_qualities": {
+                    "hardness": 79.0,
+                    "cleansing": 67.0,
+                    "bubbly": 67.0,
+                    "creamy": 12.0,
+                    "conditioning": 10.0,
+                    "iodine": 10.0,
+                    "ins": 258.0
+                },
+                "unit_system": "oz"
+            },
+            "name": "1LB Coconut"
+        },
+        "notes": ""
+    },
+    {
         "id": "382829ea-8043-4067-b37c-5397c2f231f5",
         "lot_number": "20260317-7616",
         "recipe_name": "Berry Silk",

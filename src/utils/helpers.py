@@ -1,7 +1,7 @@
-
+import os
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QDoubleSpinBox
-
+from PyQt6.QtWidgets import QDoubleSpinBox, QFileDialog
+from bs4 import BeautifulSoup
 
 
 class SelectAllSpinBox(QDoubleSpinBox):
