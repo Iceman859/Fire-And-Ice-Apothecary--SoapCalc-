@@ -22,9 +22,10 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QFrame,
     QTableWidgetItem,
+    QHeaderView,
 )
+from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtWidgets import QHeaderView
 # Data & Logic Imports
 from src.data import get_all_oil_names
 from src.data.additives import get_all_additive_names, get_additive_info, get_all_fragrance_names
@@ -102,6 +103,10 @@ class RecipeTab(QWidget):
             self.recipe_model = RecipeTableModel(self.calculator, self.controller, self.cost_manager)
             self.oils_table.setModel(self.recipe_model)
             self.oils_table.setMinimumHeight(350)
+            #INITALIZE A FONT
+            self.oils_table.setFont(QFont("Segoe UI", 10))
+            self.oils_table.horizontalHeader().setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+
             header = self.oils_table.horizontalHeader()
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
@@ -949,14 +954,36 @@ class RecipeParametersWidget(QWidget):
         self.water_value_label.setVisible(not checked)
 
     def on_water_method_changed(self, text):
+        # 1. Block signals so we don't trigger unnecessary math updates while switching
+        self.water_value_spinbox.blockSignals(True)
+
         if text == "Water:Lye Ratio":
             self.water_value_label.setText("Ratio:")
+            # Ratios are small (usually 1.5 to 4.0)
             self.water_value_spinbox.setRange(1.0, 5.0)
-            self.water_value_spinbox.setValue(2.0)
+            # Only set a default if the current value is outside this new range
+            if self.water_value_spinbox.value() > 5.0:
+                self.water_value_spinbox.setValue(2.0)
+
         elif text == "Water % of Oils":
             self.water_value_label.setText("Water %:")
-            self.water_value_spinbox.setRange(0, 100)
-            self.water_
+            # Percentages are larger (usually 20% to 40%)
+            self.water_value_spinbox.setRange(0.0, 100.0)
+            if self.water_value_spinbox.value() < 5.0:
+                self.water_value_spinbox.setValue(33.0)
+
+        elif text == "Lye Concentration":
+            self.water_value_label.setText("Lye Conc %:")
+            # Concentrations are usually 25% to 50%
+            self.water_value_spinbox.setRange(0.0, 100.0)
+            if self.water_value_spinbox.value() < 5.0:
+                self.water_value_spinbox.setValue(33.3)
+
+        # 2. Unblock signals
+        self.water_value_spinbox.blockSignals(False)
+
+        # 3. Manually trigger one update so the math reflects the new mode
+        self.update_calculations()
 
     def get_instructions(self) -> str:
         return self.instructions_input.toPlainText()

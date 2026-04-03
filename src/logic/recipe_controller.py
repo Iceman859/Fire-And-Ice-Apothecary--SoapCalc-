@@ -2,6 +2,7 @@ import json
 import os
 from PyQt6.QtWidgets import QInputDialog, QFileDialog, QMessageBox, QTableWidgetItem
 from PyQt6.QtCore import Qt
+from src import ui
 from src.models.recipe import Recipe
 from src.utils.logger import log
 from src.utils.logger import log
@@ -243,26 +244,59 @@ class RecipeController:
                 self.view.statusBar().showMessage(f"Removed {name}")
 
     def on_new_clicked(self):
-        """Resets the state for a brand new recipe."""
+        """Resets the state for a brand new recipe with clean UI defaults."""
+        # 1. Clear the Brain (Calculator)
         self.calculator.oils.clear()
         self.calculator.additives.clear()
-        self.view.recipe_tab.additives_table.setRowCount(0)
-        self.view.recipe_tab.notes_widget.set_notes("")
+
+        # 2. Reset the Metadata
         self.view.current_recipe = Recipe()
         self.view.current_recipe.name = "New Recipe"
+        self.view.recipe_tab.recipe_name_label.setText("New Recipe")
+        self.view.recipe_tab.notes_widget.set_notes("")
 
+        # 3. RESET THE UI SETTINGS (Crucial for robustness)
+        ui = self.view.recipe_settings
+        ui.superfat_spinbox.setValue(5.0)  # Standard default
+        ui.lye_combo.setCurrentText("NaOH")
+        ui.water_method_combo.setCurrentText("Water:Lye Ratio")
+        ui.water_value_spinbox.setValue(2.0)
+
+        # Clear Luxury Formulation inputs
+        ui.scent_top_name.clear()
+        ui.scent_top_desc.clear()
+        ui.scent_mid_name.clear()
+        ui.scent_mid_desc.clear()
+        ui.scent_base_name.clear()
+        ui.scent_base_desc.clear()
+        if hasattr(ui, 'instructions_input'):
+            ui.instructions_input.clear()
+
+        # 4. Handle Units and Batch Weight
         unit_pref = self.view._settings.value("unit_system", "grams").lower()
         conv = 28.3495231
 
         if unit_pref == "ounces":
             self.calculator.total_batch_weight = 32.0 * conv
+            if hasattr(ui, 'unit_toggle'):
+                ui.unit_toggle.setCurrentText("Ounces")
         elif unit_pref == "pounds":
             self.calculator.total_batch_weight = 2.0 * 16 * conv
+            if hasattr(ui, 'unit_toggle'):
+                ui.unit_toggle.setCurrentText("Pounds")
         else:
             self.calculator.total_batch_weight = 1000.0
+            if hasattr(ui, 'unit_toggle'):
+                ui.unit_toggle.setCurrentText("Grams")
 
+        # 5. Refresh Table and Run Math
+        if hasattr(self.view.recipe_tab, 'recipe_model'):
+            self.view.recipe_tab.recipe_model.refresh()
+
+        self.view.recipe_tab.additives_table.setRowCount(0)
         self.update_calculations()
-        self.view.statusBar().showMessage("New recipe created.")
+
+        self.view.statusBar().showMessage("New recipe created and UI reset.")
 
     def on_scale_clicked(self):
         """Scales the recipe based on the target weight in the UI."""
@@ -327,68 +361,138 @@ class RecipeController:
             self.view.inventory_widget.refresh_table()
 
     def perform_save(self):
-            """Logic for saving the recipe including new Luxury Formulation data."""
-            # Check if we have a name, or ask for one
-            current_name = self.view.current_recipe.name or ""
-            name, ok = QInputDialog.getText(self.view, "Save", "Recipe Name:", text=current_name)
+        """Logic for saving the recipe including new Luxury Formulation data."""
+        current_name = self.view.current_recipe.name or ""
+        name, ok = QInputDialog.getText(self.view, "Save", "Recipe Name:", text=current_name)
 
-            if ok and name:
-                recipe = self.view.current_recipe
-                ui = self.view.recipe_settings  # Pointing to your settings tab
+        if ok and name:
+            recipe = self.view.current_recipe
+            ui = self.view.recipe_settings
 
-                # --- Standard Data ---
-                recipe.name = name
-                recipe.oils = self.calculator.oils.copy()
-                recipe.additives = self.calculator.additives.copy()
-                recipe.notes = self.view.recipe_tab.notes_widget.get_notes()
+        # --- Standard Data ---
+            recipe.name = name
+            recipe.oils = self.calculator.oils.copy()
+            recipe.additives = self.calculator.additives.copy()
+            recipe.notes = self.view.recipe_tab.notes_widget.get_notes()
 
-                # --- NEW: Luxury Formulation Data ---
-                # 1. Scent Profile
-                recipe.scent_top = {
-                    "name": ui.scent_top_name.text(),
-                    "description": ui.scent_top_desc.text()
-                }
-                recipe.scent_mid = {
-                    "name": ui.scent_mid_name.text(),
-                    "description": ui.scent_mid_desc.text()
-                }
-                recipe.scent_base = {
-                    "name": ui.scent_base_name.text(),
-                    "description": ui.scent_base_desc.text()
-                }
+            # --- Syncing your UI specifically ---
+            recipe.lye_type = ui.lye_combo.currentText()
+            recipe.superfat_percent = ui.superfat_spinbox.value()
 
-                # 2. Manufacturing Instructions
-                recipe.instructions = self.view.recipe_settings.get_instructions()
+            # Save the METHOD (Ratio, %, or Concentration)
+            recipe.water_calc_method = ui.water_method_combo.currentText()
 
-                # --- Execute Save ---
-                path = self.recipe_manager.save_recipe(recipe)
-                if path:
-                    self.view.statusBar().showMessage(f"Successfully saved {name}")
-                    self.view.manager_widget.refresh_recipe_list()
+            # Save the VALUE (This is the 2.0 or 33.0 or 38.0 from that shared box)
+            # In your code, this is always 'water_value_spinbox'
+            recipe.water_percent = ui.water_value_spinbox.value()
+
+            # If you use the 50/50 masterbatch toggle
+            recipe.use_masterbatch = ui.masterbatch_check.isChecked()
+
+            # --- Scent Profile ---
+            recipe.scent_top = {
+                "name": ui.scent_top_name.text(),
+                "description": ui.scent_top_desc.text()
+            }
+            recipe.scent_mid = {
+                "name": ui.scent_mid_name.text(),
+                "description": ui.scent_mid_desc.text()
+            }
+            recipe.scent_base = {
+                "name": ui.scent_base_name.text(),
+                "description": ui.scent_base_desc.text()
+            }
+
+            # --- Manufacturing Instructions ---
+            recipe.instructions = self.view.recipe_settings.get_instructions()
+
+            log.debug(f"Saving File with these parameters: Name={recipe.name}, Oils={recipe.oils}, Additives={recipe.additives}, Superfat={recipe.superfat_percent}, Lye Type={recipe.lye_type}, Water Method={recipe.water_calc_method}, Water Value={recipe.water_percent}, Masterbatch={recipe.use_masterbatch}")
+
+            # --- Execute Save ---
+            path = self.recipe_manager.save_recipe(recipe)
+            if path:
+                self.view.statusBar().showMessage(f"Successfully saved {name}")
+                self.view.manager_widget.refresh_recipe_list()
 
     def perform_load(self, filepath):
+        """Robust load logic that syncs the file data to the UI before calculating."""
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
 
+            # Convert JSON dict to your Recipe object
             loaded = Recipe.from_dict(data)
-            # ... name logic ...
+            ui = self.view.recipe_settings
+
+            # Block signals to prevent unwanted math during UI sync
+            ui.water_method_combo.blockSignals(True)
+            ui.water_value_spinbox.blockSignals(True)
+            ui.superfat_spinbox.blockSignals(True)
+
+            # 1. SYNC UI SETTINGS (Do this before the math runs)
+            # -------------------------------------------------
+            # Force Unit System (Oz vs Grams)
+            if hasattr(ui, 'unit_toggle'):
+                # Assuming your unit_toggle is a QComboBox or similar
+                ui.unit_toggle.setCurrentText(loaded.unit_system)
+
+            # Set Superfat and Lye Type
+            ui.superfat_spinbox.setValue(loaded.superfat_percent)
+            ui.lye_combo.setCurrentText(loaded.lye_type)
+
+            # Set the Water Method (Dropdown) FIRST
+            ui.water_method_combo.setCurrentText(loaded.water_calc_method)
+
+            # Set the Water Value (The 2.0, 33.0, etc.) SECOND
+            # This ensures the spinbox is interpreted correctly by the UI
+            ui.water_value_spinbox.setValue(loaded.water_percent)
+            self.view.recipe_settings.on_water_method_changed(loaded.water_calc_method)
+
+            #Unlock signals after syncing
+            ui.water_method_combo.blockSignals(False)
+            ui.water_value_spinbox.blockSignals(False)
+            ui.superfat_spinbox.blockSignals(False)
+
+
+
+            # Scent Profile (Luxury Formulation)
+            ui.scent_top_name.setText(loaded.scent_top.get("name", ""))
+            ui.scent_top_desc.setText(loaded.scent_top.get("description", ""))
+            ui.scent_mid_name.setText(loaded.scent_mid.get("name", ""))
+            ui.scent_mid_desc.setText(loaded.scent_mid.get("description", ""))
+            ui.scent_base_name.setText(loaded.scent_base.get("name", ""))
+            ui.scent_base_desc.setText(loaded.scent_base.get("description", ""))
+
+            # Instructions
+            if hasattr(ui, 'instructions_input'):
+                ui.instructions_input.setPlainText(loaded.instructions)
+
+            # 2. UPDATE UNDERLYING DATA
+            # -------------------------------------------------
             self.view.recipe_tab.recipe_name_label.setText(loaded.name)
-            # 1. Update the underlying data
             self.calculator.oils = loaded.oils.copy()
             self.calculator.additives = data.get("additives", {}).copy()
-            self.refresh_additives_table()
+
+            # Update the Recipe object reference in the view
             self.view.current_recipe = loaded
 
-            # 2. IMPORTANT: Tell the UI the table has changed
+            # 3. REFRESH & CALCULATE
+            # -------------------------------------------------
+            # Refresh the table model to show the new oils
             if hasattr(self.view.recipe_tab, 'recipe_model'):
-                self.view.recipe_model.refresh()
+                self.view.recipe_tab.recipe_model.refresh()
 
-            # 3. Now run the math (it will see the new rows)
+            self.refresh_additives_table()
+
+            # FINALLY: Run calculations once the UI reflects all loaded values
             self.update_calculations()
-            self.view.statusBar().showMessage(f"Loaded {loaded.name}")
+
+            self.view.statusBar().showMessage(f"Successfully loaded: {loaded.name}")
+
         except Exception as e:
-            log.error(f"Failed to load recipe: {e}")
+            # log.error is good, but show a message to yourself in the UI too
+            self.view.statusBar().showMessage(f"Load Error: {str(e)}")
+            print(f"Detailed Error: {e}")
 
     def on_load_clicked(self, filepath=None):
         if not filepath:
